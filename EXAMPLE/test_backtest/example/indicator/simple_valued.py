@@ -12,8 +12,10 @@ class simpleValued:
          """
         #daily = pro.QA_fetch_get_dailyindicator(start=start,end=end)
         finacial = pro.QA_fetch_get_finindicator(start=start,end=end)
-        def _indicator():
-            pass
+        def _indicator(data):
+            roe_year = QA.EMA(data['roe'], 4)
+            roe_half_year = QA.EMA(data['roe'], 2)
+            asset_rise_3year = QA.EMA(data['equity_yoy'], 12)
         finacial.groupby('ts_code').apply(_indicator)
 
 
