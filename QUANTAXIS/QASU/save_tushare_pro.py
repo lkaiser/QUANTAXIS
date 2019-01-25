@@ -29,6 +29,7 @@ import re
 import time
 import pandas as pd
 from QUANTAXIS.QAUtil.QADate import QA_util_today_str
+from concurrent.futures import ThreadPoolExecutor
 
 
 from QUANTAXIS.QAFetch.QATushare import (QA_fetch_get_stock_day,
@@ -44,40 +45,6 @@ from QUANTAXIS.QAUtil.QASetting import DATABASE
 
 import tushare as ts
 ts.set_token('0f7da64f6c87dfa58456e0ad4c7ccf31d6c6e89458dc5b575e028c64')
-
-def QA_save_stock_day_all(client=DATABASE):
-    df = ts.get_stock_basics()
-    __coll = client.stock_day
-    __coll.ensure_index('code')
-
-    def saving_work(i):
-        QA_util_log_info('Now Saving ==== %s' % (i))
-        try:
-            data_json = QA_fetch_get_stock_day(
-                i, start='1990-01-01')
-
-            __coll.insert_many(data_json)
-        except:
-            QA_util_log_info('error in saving ==== %s' % str(i))
-
-    for i_ in range(len(df.index)):
-        QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
-        QA_util_log_info('DOWNLOAD PROGRESS %s ' % str(
-            float(i_ / len(df.index) * 100))[0:4] + '%')
-        saving_work(df.index[i_])
-
-    saving_work('hs300')
-    saving_work('sz50')
-
-
-def QA_SU_save_stock_list(client=DATABASE):
-    data = QA_fetch_get_stock_list()
-    date = str(datetime.date.today())
-    date_stamp = QA_util_date_stamp(date)
-    coll = client.stock_info_tushare
-    coll.insert({'date': date, 'date_stamp': date_stamp,
-                 'stock': {'code': data}})
-
 
 def QA_SU_save_stock_terminated(client=DATABASE):
     '''
@@ -102,8 +69,9 @@ def QA_SU_save_stock_terminated(client=DATABASE):
 
 
 
-def QA_SU_save_stock_daily_basic(start_day='2001-01-01',client=DATABASE,force=False):
+def QA_SU_save_stock_daily_basic(start_day='20010101',client=DATABASE,force=False):
     '''
+    每日行情
             名称	类型	描述
             ts_code	str	TS股票代码
             trade_date	str	交易日期
@@ -137,7 +105,7 @@ def QA_SU_save_stock_daily_basic(start_day='2001-01-01',client=DATABASE,force=Fa
     #days = pd.date_range(start_day, today, freq='1d').strftime('%Y-%m-%d').values
     stock_daily = client.stock_daily_basic_tushare
     print("##################get daily indicators start####################")
-    for i_ in range(2277,len(df.index)):
+    for i_ in range(3017,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         start_date = start_day
         ref = stock_daily.find({'ts_code': df.iloc[i_].ts_code}).sort([('trade_date',-1)]).limit(1)
@@ -148,7 +116,11 @@ def QA_SU_save_stock_daily_basic(start_day='2001-01-01',client=DATABASE,force=Fa
             if start_date.replace("-","")> today.replace("-",""):
                 continue
         print('UPDATE stock daily basic Trying updating %s from %s to %s' % (df.iloc[i_].ts_code, start_date.replace("-",""),today.replace("-","")))
-        daily = pro.daily_basic(ts_code=df.iloc[i_].ts_code, start_date=start_date.replace("-",""),end_date=today.replace("-",""))
+        try:
+            daily = pro.daily_basic(ts_code=df.iloc[i_].ts_code, start_date=start_date.replace("-",""),end_date=today.replace("-",""))
+        except Exception as e:
+            time.sleep(30)
+            daily = pro.daily_basic(ts_code=df.iloc[i_].ts_code, start_date=start_date.replace("-", ""), end_date=today.replace("-", ""))
         print(" Get stock daily basic from tushare,days count is %d" % len(daily))
         if not daily.empty:
             #coll = client.stock_daily_basic_tushare
@@ -159,7 +131,7 @@ def QA_SU_save_stock_daily_basic(start_day='2001-01-01',client=DATABASE,force=Fa
         print(" Save data to stock_daily_basic_tushare collection， OK")
 
 
-def QA_SU_save_stock_report_income(start_day='2001-01-01',client=DATABASE,force=False):
+def QA_SU_save_stock_report_income(start_day='20010101',client=DATABASE,force=False):
     '''
     利润表数据
             输出参数
@@ -257,17 +229,20 @@ distable_profit	float	可分配利润
     if df.empty:
         print("there is no stock info,stock count is %d" % len(df))
         return
-    today = QA_util_today_str()
     report_income = client.stock_report_income_tushare
     print("##################get income reports start####################")
     for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
-        start_date = start_day
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
-        print('UPDATE stock income Trying updating %s from %s to %s' % (df.iloc[i_].ts_code, start_date.replace("-",""),today.replace("-","")))
-        income = pro.income(ts_code=df.iloc[i_].ts_code)
+        print('UPDATE stock income Trying updating %s' % (df.iloc[i_].ts_code))
+        time.sleep(1)
+        try:
+            income = pro.income(ts_code=df.iloc[i_].ts_code)
+        except Exception as e:
+            time.sleep(30)
+            income = pro.income(ts_code=df.iloc[i_].ts_code)
         print(" Get stock income reports from tushare,reports count is %d" % len(income))
         if not income.empty:
             #coll = client.stock_report_income_tushare
@@ -277,7 +252,7 @@ distable_profit	float	可分配利润
             report_income.insert_many(json_data)
         print(" Save data to stock_report_income_tushare collection， OK")
 
-def QA_SU_save_stock_report_assetliability(start_day='2001-01-01',client=DATABASE,force=False):
+def QA_SU_save_stock_report_assetliability(start_day='20010101',client=DATABASE,force=False):
     '''
     资产负债表数据
 输出参数
@@ -452,12 +427,16 @@ hfs_sales	float	持有待售的负债
     print("##################get asset liability reports start####################")
     for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
-        start_date = start_day
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
-        print('UPDATE stock asset liability Trying updating %s from %s to %s' % (df.iloc[i_].ts_code, start_date.replace("-",""),today.replace("-","")))
-        income = pro.balancesheet(ts_code=df.iloc[i_].ts_code)
+        print('UPDATE stock asset liability Trying updating %s' % (df.iloc[i_].ts_code))
+        time.sleep(1)
+        try:
+            income = pro.balancesheet(ts_code=df.iloc[i_].ts_code)
+        except Exception as e:
+            time.sleep(30)
+            income = pro.balancesheet(ts_code=df.iloc[i_].ts_code)
         print(" Get stock asset liability reports from tushare,reports count is %d" % len(income))
         if not income.empty:
             #coll = client.stock_report_income_tushare
@@ -468,7 +447,7 @@ hfs_sales	float	持有待售的负债
         print(" Save data to stock_report_assetliability_tushare collection， OK")
 
 
-def QA_SU_save_stock_report_cashflow(start_day='2001-01-01',client=DATABASE,force=False):
+def QA_SU_save_stock_report_cashflow(start_day='20010101',client=DATABASE,force=False):
     '''
     现金流表数据
 输出参数
@@ -591,17 +570,20 @@ im_n_incr_cash_equ	float	现金及现金等价物净增加额(间接法)
     if df.empty:
         print("there is no stock info,stock count is %d" % len(df))
         return
-    today = QA_util_today_str()
     report_income = client.stock_report_cashflow_tushare
     print("##################get asset cashflow reports start####################")
     for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
-        start_date = start_day
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
-        print('UPDATE stock cashflow Trying updating %s from %s to %s' % (df.iloc[i_].ts_code, start_date.replace("-",""),today.replace("-","")))
-        income = pro.cashflow(ts_code=df.iloc[i_].ts_code)
+        print('UPDATE stock cashflow Trying updating %s' % (df.iloc[i_].ts_code))
+        time.sleep(1)
+        try:
+            income = pro.cashflow(ts_code=df.iloc[i_].ts_code)
+        except Exception as e:
+            time.sleep(30)
+            income = pro.cashflow(ts_code=df.iloc[i_].ts_code)
         print(" Get stock cashflow reports from tushare,reports count is %d" % len(income))
         if not income.empty:
             #coll = client.stock_report_income_tushare
@@ -649,16 +631,23 @@ change_reason	str	业绩变动原因
     for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         start_date = start_year
+        time.sleep(1)
         ref = report_forcast.find({'ts_code': df.iloc[i_].ts_code,'trade_date':{'$regex':'^2019'}})
         if ref.count() > 0:
             report_forcast.remove({'ts_code': df.iloc[i_].ts_code,'trade_date':{'$regex':'^2019'}})
         print('UPDATE stock forcast report Trying updating %s from %s' % (df.iloc[i_].ts_code, start_date.replace("-","")))
         forcasts = []
-        for y in years:
-            for s in season:
-                f = pro.forcast(ts_code=df.iloc[i_].ts_code, period=str(y) + s)
-                if not f.empty:
-                    forcasts.append(f)
+        try:
+            for y in years:
+                for s in season:
+                    time.sleep(1)
+                    f = pro.forcast(ts_code=df.iloc[i_].ts_code, period=str(y) + s)
+                    if not f.empty:
+                        forcasts.append(f)
+        except Exception as e:
+            print(e)
+            time.sleep(30)
+            continue
         print(" Get stock forcast reports from tushare,reports count is %d" % len(forcasts))
         if not forcasts:
             json_data = QA_util_to_json_from_pandas(pd.concat(forcasts))
@@ -666,7 +655,7 @@ change_reason	str	业绩变动原因
         print(" Save data to stock_report_forcast_tushare collection， OK")
 
 
-def QA_SU_save_stock_report_express(start_day='2001-01-01',client=DATABASE,force=False):
+def QA_SU_save_stock_report_express(start_day='20010101',client=DATABASE,force=False):
     '''
     业绩快报数据
 输出参数
@@ -716,17 +705,20 @@ remark	str	备注
     if df.empty:
         print("there is no stock info,stock count is %d" % len(df))
         return
-    today = QA_util_today_str()
     report_income = client.stock_report_express_tushare
     print("##################get express reports start####################")
     for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
-        start_date = start_day
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
-        print('UPDATE stock express Trying updating %s from %s to %s' % (df.iloc[i_].ts_code, start_date.replace("-",""),today.replace("-","")))
-        income = pro.express(ts_code=df.iloc[i_].ts_code)
+        print('UPDATE stock express Trying updating %s' % (df.iloc[i_].ts_code))
+        time.sleep(1)
+        try:
+            income = pro.express(ts_code=df.iloc[i_].ts_code)
+        except Exception as e:
+            time.sleep(30)
+            income = pro.express(ts_code=df.iloc[i_].ts_code)
         print(" Get stock express reports from tushare,reports count is %d" % len(income))
         if not income.empty:
             #coll = client.stock_report_income_tushare
@@ -737,7 +729,7 @@ remark	str	备注
         print(" Save data to stock_report_express_tushare collection， OK")
 
 
-def QA_SU_save_stock_report_dividend(start_day='2001-01-01',client=DATABASE,force=False):
+def QA_SU_save_stock_report_dividend(start_day='20010101',client=DATABASE,force=False):
     '''
     分红送股数据
 输出参数
@@ -771,17 +763,20 @@ base_share	float	N	基准股本（万）
     if df.empty:
         print("there is no stock info,stock count is %d" % len(df))
         return
-    today = QA_util_today_str()
     report_income = client.stock_report_dividend_tushare
     print("##################get dividend reports start####################")
     for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
-        start_date = start_day
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
-        print('UPDATE stock dividend Trying updating %s from %s to %s' % (df.iloc[i_].ts_code, start_date.replace("-",""),today.replace("-","")))
-        income = pro.dividend(ts_code=df.iloc[i_].ts_code)
+        print('UPDATE stock dividend Trying updating %s' % (df.iloc[i_].ts_code))
+        time.sleep(1)
+        try:
+            income = pro.dividend(ts_code=df.iloc[i_].ts_code)
+        except Exception as e:
+            time.sleep(30)
+            income = pro.dividend(ts_code=df.iloc[i_].ts_code)
         print(" Get stock dividend reports from tushare,reports count is %d" % len(income))
         if not income.empty:
             #coll = client.stock_report_income_tushare
@@ -791,7 +786,7 @@ base_share	float	N	基准股本（万）
             report_income.insert_many(json_data)
         print(" Save data to stock_report_express_tushare collection， OK")
 
-def QA_SU_save_stock_report_fina_indicator(start_day='2001-01-01',client=DATABASE,force=False):
+def QA_SU_save_stock_report_fina_indicator(start_day='20010101',client=DATABASE,force=False):
     '''
     财务数据
 输出参数，#号默认未返回字段
@@ -974,17 +969,23 @@ equity_yoy	float	净资产同比增长率
     if df.empty:
         print("there is no stock info,stock count is %d" % len(df))
         return
-    today = QA_util_today_str()
     report_income = client.stock_report_finindicator_tushare
     print("##################get fina_indicator reports start####################")
-    for i_ in range(len(df.index)):
+    for i_ in range(600,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
-        start_date = start_day
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
-        print('UPDATE stock fina_indicator Trying updating %s from %s to %s' % (df.iloc[i_].ts_code, start_date.replace("-",""),today.replace("-","")))
-        income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code)
+        print('UPDATE stock fina_indicator Trying updating %s' % (df.iloc[i_].ts_code))
+        time.sleep(1)
+        try:
+            income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code)
+        except Exception as e:
+            print(e)
+            time.sleep(30)
+            income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code)
+        finally:
+            pass
         print(" Get stock fina_indicator reports from tushare,reports count is %d" % len(income))
         if not income.empty:
             #coll = client.stock_report_income_tushare
@@ -995,7 +996,7 @@ equity_yoy	float	净资产同比增长率
         print(" Save data to stock_report_finindicator_tushare collection， OK")
 
 
-def QA_SU_save_stock_report_audit(start_day='2001-01-01',client=DATABASE,force=False):
+def QA_SU_save_stock_report_audit(start_day='20010101',client=DATABASE,force=False):
     '''
     财务审计意见
 输出参数
@@ -1020,17 +1021,20 @@ audit_sign	str	签字会计师
     if df.empty:
         print("there is no stock info,stock count is %d" % len(df))
         return
-    today = QA_util_today_str()
     report_income = client.stock_report_audit_tushare
     print("##################get audit reports start####################")
     for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
-        start_date = start_day
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
-        print('UPDATE stock audit Trying updating %s from %s to %s' % (df.iloc[i_].ts_code, start_date.replace("-",""),today.replace("-","")))
-        income = pro.fina_audit(ts_code=df.iloc[i_].ts_code)
+        print('UPDATE stock audit Trying updating %s from %s to %s' % (df.iloc[i_].ts_code))
+        time.sleep(1)
+        try:
+            income = pro.fina_audit(ts_code=df.iloc[i_].ts_code)
+        except Exception as e:
+            time.sleep(30)
+            income = pro.fina_audit(ts_code=df.iloc[i_].ts_code)
         print(" Get stock audit reports from tushare,reports count is %d" % len(income))
         if not income.empty:
             #coll = client.stock_report_income_tushare
@@ -1042,7 +1046,7 @@ audit_sign	str	签字会计师
 
 
 
-def QA_SU_save_stock_report_mainbz(start_day='2001-01-01',client=DATABASE,force=False):
+def QA_SU_save_stock_report_mainbz(start_day='20010101',client=DATABASE,force=False):
     '''
     主营业务构成
 输出参数
@@ -1068,17 +1072,22 @@ update_flag	str	是否更新
     if df.empty:
         print("there is no stock info,stock count is %d" % len(df))
         return
-    today = QA_util_today_str()
     report_income = client.stock_report_mainbz_tushare
     print("##################get mainbz reports start####################")
     for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
-        start_date = start_day
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
-        print('UPDATE stock mainbz Trying updating %s from %s to %s' % (df.iloc[i_].ts_code, start_date.replace("-",""),today.replace("-","")))
-        income = pro.fina_mainbz(ts_code=df.iloc[i_].ts_code)
+        print('UPDATE stock mainbz Trying updating %s from %s to %s' % (df.iloc[i_].ts_code))
+        time.sleep(1)
+        try:
+            income = pro.fina_mainbz(ts_code=df.iloc[i_].ts_code)
+        except Exception as e:
+            time.sleep(30)
+            income = pro.fina_mainbz(ts_code=df.iloc[i_].ts_code)
+        finally:
+            pass
         print(" Get stock mainbz reports from tushare,reports count is %d" % len(income))
         if not income.empty:
             #coll = client.stock_report_income_tushare
@@ -1088,148 +1097,107 @@ update_flag	str	是否更新
             report_income.insert_many(json_data)
         print(" Save data to stock_report_mainbz_tushare collection， OK")
 
-
-def QA_SU_save_stock_info_tushare(client=DATABASE):
+def QA_SU_save_stock_daily(start_day='20010101',client=DATABASE,force=False):
     '''
-        获取 股票的 基本信息，包含股票的如下信息
+    每日行情
+输出参数
 
-        code,代码
-        name,名称
-        industry,所属行业
-        area,地区
-        pe,市盈率
-        outstanding,流通股本(亿)
-        totals,总股本(亿)
-        totalAssets,总资产(万)
-        liquidAssets,流动资产
-        fixedAssets,固定资产
-        reserved,公积金
-        reservedPerShare,每股公积金
-        esp,每股收益
-        bvps,每股净资
-        pb,市净率
-        timeToMarket,上市日期
-        undp,未分利润
-        perundp, 每股未分配
-        rev,收入同比(%)
-        profit,利润同比(%)
-        gpr,毛利率(%)
-        npr,净利润率(%)
-        holders,股东人数
+名称	类型	描述
+ts_code	str	股票代码
+trade_date	str	交易日期
+open	float	开盘价
+high	float	最高价
+low	float	最低价
+close	float	收盘价
+pre_close	float	昨收价
+change	float	涨跌额
+pct_chg	float	涨跌幅 （未复权，如果是复权请用 通用行情接口 ）
+vol	float	成交量 （手）
+amount	float	成交额 （千元）
 
-        add by tauruswang
+            add by minijjlk
 
-    在命令行工具 quantaxis 中输入 save stock_info_tushare 中的命令
-    :param client:
-    :return:
-    '''
-    df = ts.get_stock_basics()
-    print(" Get stock info from tushare,stock count is %d" % len(df))
-    coll = client.stock_info_tushare
-    client.drop_collection(coll)
-    json_data = json.loads(df.reset_index().to_json(orient='records'))
-    coll.insert(json_data)
-    print(" Save data to stock_info_tushare collection， OK")
-
-
-def QA_SU_save_trade_date_all(client=DATABASE):
-    data = QA_fetch_get_trade_date('', '')
-    coll = client.trade_date
-    coll.insert_many(data)
-
-
-def QA_SU_save_stock_info(client=DATABASE):
-    data = QA_fetch_get_stock_info('all')
-    coll = client.stock_info
-    coll.insert_many(data)
-
-
-def QA_save_stock_day_all_bfq(client=DATABASE):
-    df = ts.get_stock_basics()
-
-    __coll = client.stock_day_bfq
-    __coll.ensure_index('code')
-
-    def saving_work(i):
-        QA_util_log_info('Now Saving ==== %s' % (i))
-        try:
-            data_json = QA_fetch_get_stock_day(
-                i, start='1990-01-01', if_fq='00')
-
-            __coll.insert_many(data_json)
-        except:
-            QA_util_log_info('error in saving ==== %s' % str(i))
-
+        在命令行工具 quantaxis 中输入 save stock_income 中的命令
+        :param client:
+        :return:
+        '''
+    pro = ts.pro_api()
+    df = pro.stock_basic()
+    if df.empty:
+        print("there is no stock info,stock count is %d" % len(df))
+        return
+    report_income = client.stock_daily_tushare
+    print("##################get mainbz reports start####################")
     for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
-        QA_util_log_info('DOWNLOAD PROGRESS %s ' % str(
-            float(i_ / len(df.index) * 100))[0:4] + '%')
-        saving_work(df.index[i_])
-
-    saving_work('hs300')
-    saving_work('sz50')
-
-
-def QA_save_stock_day_with_fqfactor(client=DATABASE):
-    df = ts.get_stock_basics()
-
-    __coll = client.stock_day
-    __coll.ensure_index('code')
-
-    def saving_work(i):
-        QA_util_log_info('Now Saving ==== %s' % (i))
+        ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
+        if ref.count() > 0:
+            report_income.remove({'ts_code': df.iloc[i_].ts_code})
+        print('UPDATE stock daily Trying updating %s from %s to %s' % (df.iloc[i_].ts_code))
+        time.sleep(1)
         try:
-            data_hfq = QA_fetch_get_stock_day(
-                i, start='1990-01-01', if_fq='02', type_='pd')
-            data_json = QA_util_to_json_from_pandas(data_hfq)
-            __coll.insert_many(data_json)
-        except:
-            QA_util_log_info('error in saving ==== %s' % str(i))
-    for i_ in range(len(df.index)):
-        QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
-        QA_util_log_info('DOWNLOAD PROGRESS %s ' % str(
-            float(i_ / len(df.index) * 100))[0:4] + '%')
-        saving_work(df.index[i_])
-
-    saving_work('hs300')
-    saving_work('sz50')
-
-    QA_util_log_info('Saving Process has been done !')
-    return 0
-
-
-def QA_save_lhb(client=DATABASE):
-    __coll = client.lhb
-    __coll.ensure_index('code')
-
-    start = datetime.datetime.strptime("2006-07-01", "%Y-%m-%d").date()
-    end = datetime.date.today()
-    i = 0
-    while start < end:
-        i = i + 1
-        start = start + datetime.timedelta(days=1)
-        try:
-            pd = QA_fetch_get_lhb(start.isoformat())
-            if pd is None:
-                continue
-            data = pd\
-                .assign(pchange=pd.pchange.apply(float))\
-                .assign(amount=pd.amount.apply(float))\
-                .assign(bratio=pd.bratio.apply(float))\
-                .assign(sratio=pd.sratio.apply(float))\
-                .assign(buy=pd.buy.apply(float))\
-                .assign(sell=pd.sell.apply(float))
-            # __coll.insert_many(QA_util_to_json_from_pandas(data))
-            for i in range(0, len(data)):
-                __coll.update({"code": data.iloc[i]['code'], "date": data.iloc[i]['date']}, {
-                              "$set": QA_util_to_json_from_pandas(data)[i]}, upsert=True)
-            time.sleep(2)
-            if i % 10 == 0:
-                time.sleep(60)
+            income = pro.daily(ts_code=df.iloc[i_].ts_code)
         except Exception as e:
-            print("error codes:")
-            time.sleep(2)
-            continue
+            time.sleep(30)
+            income = pro.daily(ts_code=df.iloc[i_].ts_code)
+        finally:
+            pass
+        print(" Get stock daily from tushare,reports count is %d" % len(income))
+        if not income.empty:
+            #coll = client.stock_report_income_tushare
+            #client.drop_collection(coll)
+            json_data = QA_util_to_json_from_pandas(income)
+            #json_data = json.loads(df.reset_index().to_json(orient='records'))
+            report_income.insert_many(json_data)
+        print(" Save data to stock_daily_tushare collection， OK")
+
+
+def QA_SU_save_stock_adj_factor(start_day='20010101',client=DATABASE,force=False):
+    '''
+    复权因子
+输出参数
+
+名称	类型	描述
+ts_code	str	股票代码
+trade_date	str	交易日期
+adj_factor	float	复权因子
+
+            add by minijjlk
+
+        在命令行工具 quantaxis 中输入 save stock_income 中的命令
+        :param client:
+        :return:
+        '''
+    pro = ts.pro_api()
+    df = pro.stock_basic()
+    if df.empty:
+        print("there is no stock info,stock count is %d" % len(df))
+        return
+    report_income = client.stock_daily_adj_tushare
+    print("##################get mainbz reports start####################")
+    for i_ in range(len(df.index)):
+        QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
+        ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
+        if ref.count() > 0:
+            report_income.remove({'ts_code': df.iloc[i_].ts_code})
+        print('UPDATE stock daily adj Trying updating %s from %s to %s' % (df.iloc[i_].ts_code))
+        time.sleep(1)
+        try:
+            income = pro.adj_factor(ts_code=df.iloc[i_].ts_code)
+        except Exception as e:
+            time.sleep(30)
+            income = pro.adj_factor(ts_code=df.iloc[i_].ts_code)
+        finally:
+            pass
+        print(" Get stock daily from tushare,reports count is %d" % len(income))
+        if not income.empty:
+            #coll = client.stock_report_income_tushare
+            #client.drop_collection(coll)
+            json_data = QA_util_to_json_from_pandas(income)
+            #json_data = json.loads(df.reset_index().to_json(orient='records'))
+            report_income.insert_many(json_data)
+        print(" Save data to stock_daily_adj_tushare collection， OK")
+
 
 
 if __name__ == '__main__':
@@ -1238,5 +1206,27 @@ if __name__ == '__main__':
     #print(pd.date_range('2019-01-01','2019-01-23', freq='1d').strftime('%Y-%m-%d').values)
     #print(pd.date_range('20190101',periods=2, freq='1d').strftime('%Y%m%d').values[-1])
     #DATABASE.stock_daily_basic_tushare.remove()
-    QA_SU_save_stock_daily_basic(start_day='2001-01-01')
+    #QA_SU_save_stock_report_fina_indicator(start_day='20010101')
+    QA_SU_save_stock_report_assetliability(start_day='20010101')
+    QA_SU_save_stock_report_income(start_day='20010101')
+    QA_SU_save_stock_report_cashflow(start_day='20010101')
+
+    result = []
+    # def when_done(r):
+    #     """ProcessPoolExecutor每一个进程结束后结果append到result中"""
+    #     result.append(r.result())
+    # with ThreadPoolExecutor(max_workers=2) as pool:
+    #     future_result4 = pool.submit(QA_SU_save_stock_report_fina_indicator)
+    #     future_result4.add_done_callback(lambda: print('QA_SU_save_stock_report_fina_indicator finished'))
+    #     future_result1 = pool.submit(QA_SU_save_stock_report_assetliability)
+    #     future_result1.add_done_callback(lambda : print('QA_SU_save_stock_report_assetliability finished'))
+    #     future_result2 = pool.submit(QA_SU_save_stock_report_income)
+    #     future_result2.add_done_callback(lambda: print('QA_SU_save_stock_report_income finished'))
+    #     future_result3 = pool.submit(QA_SU_save_stock_report_cashflow)
+    #     future_result3.add_done_callback(lambda: print('QA_SU_save_stock_report_cashflow finished'))
+
+
+    print('#####################all done##########################')
+
+
     #print('2019-05-22'>'2019-08-01')
