@@ -1207,7 +1207,7 @@ if __name__ == '__main__':
     #print(pd.date_range('20190101',periods=2, freq='1d').strftime('%Y%m%d').values[-1])
     #DATABASE.stock_daily_basic_tushare.remove()
     #QA_SU_save_stock_report_fina_indicator(start_day='20010101')
-    QA_SU_save_stock_report_assetliability(start_day='20010101')
+    #QA_SU_save_stock_report_assetliability(start_day='20010101')
     QA_SU_save_stock_report_income(start_day='20010101')
     QA_SU_save_stock_report_cashflow(start_day='20010101')
 
