@@ -105,7 +105,7 @@ def QA_SU_save_stock_daily_basic(start_day='20010101',client=DATABASE,force=Fals
     #days = pd.date_range(start_day, today, freq='1d').strftime('%Y-%m-%d').values
     stock_daily = client.stock_daily_basic_tushare
     print("##################get daily indicators start####################")
-    for i_ in range(3017,len(df.index)):
+    for i_ in range(0,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         start_date = start_day
         ref = stock_daily.find({'ts_code': df.iloc[i_].ts_code}).sort([('trade_date',-1)]).limit(1)
@@ -971,7 +971,7 @@ equity_yoy	float	净资产同比增长率
         return
     report_income = client.stock_report_finindicator_tushare
     print("##################get fina_indicator reports start####################")
-    for i_ in range(600,len(df.index)):
+    for i_ in range(0,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
@@ -1206,8 +1206,10 @@ if __name__ == '__main__':
     #print(pd.date_range('2019-01-01','2019-01-23', freq='1d').strftime('%Y-%m-%d').values)
     #print(pd.date_range('20190101',periods=2, freq='1d').strftime('%Y%m%d').values[-1])
     #DATABASE.stock_daily_basic_tushare.remove()
-    #QA_SU_save_stock_report_fina_indicator(start_day='20010101')
-    #QA_SU_save_stock_report_assetliability(start_day='20010101')
+
+    QA_SU_save_stock_daily_basic(start_day='20010101')
+    QA_SU_save_stock_report_fina_indicator(start_day='20010101')
+    QA_SU_save_stock_report_assetliability(start_day='20010101')
     QA_SU_save_stock_report_income(start_day='20010101')
     QA_SU_save_stock_report_cashflow(start_day='20010101')
 
