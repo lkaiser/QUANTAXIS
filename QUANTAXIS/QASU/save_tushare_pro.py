@@ -1208,8 +1208,10 @@ if __name__ == '__main__':
     #DATABASE.stock_daily_basic_tushare.remove()
     #QA_SU_save_stock_report_fina_indicator(start_day='20010101')
     #QA_SU_save_stock_report_assetliability(start_day='20010101')
-    QA_SU_save_stock_report_income(start_day='20010101')
-    QA_SU_save_stock_report_cashflow(start_day='20010101')
+    # QA_SU_save_stock_report_income(start_day='20010101')
+    # QA_SU_save_stock_report_cashflow(start_day='20010101')
+
+
 
     result = []
     # def when_done(r):
