@@ -1127,7 +1127,7 @@ amount	float	成交额 （千元）
         print("there is no stock info,stock count is %d" % len(df))
         return
     report_income = client.stock_daily_tushare
-    print("##################get mainbz reports start####################")
+    print("##################get stock daily start####################")
     for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})

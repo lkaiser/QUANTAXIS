@@ -32,7 +32,6 @@ def simple_backtest(AC:QA.QA_Account, code, start:str, end:str):
     stock_signal = sv.top5_valued()
     for peroid_item in stock_signal.panel_gen:
         for stock_item in peroid_item.security_gen:
-
             cur_stock_code = stock_item.code[0]
             cur_stock_date = stock_item.date[0]
             # 可卖数量
