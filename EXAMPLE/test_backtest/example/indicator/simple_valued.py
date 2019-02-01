@@ -79,7 +79,6 @@ class simpleValued:
 
 
 
-
     def top5_valued(self,df):
         """
         简单价值判断，近1年 roe,近半年roe，近3年净资产增速，近2年净资产增速。价值法6年pb、7年pb
