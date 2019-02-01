@@ -6,14 +6,20 @@ import numpy as np
 
 class simpleValued:
 
+    def __init__(self,start,end):
+        start_2years_bf = str(int(start) - 2)
+        self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
+        self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
+        self.basic = pro.QA_fetch_get_dailyindicator(start=start,end=end)
+        self.dailymarket = None
 
-    def allValues(self,start,end):
+
+    def indcators_prepare(self,start,end):
         """
             简单价值判断，近1年 roe,近半年roe，近3年净资产增速，近2年净资产增速。价值法6年pb、7年pb
          """
         #daily = pro.QA_fetch_get_dailyindicator(start=start,end=end)
-        start_2years_bf = str(int(start)-2)
-        finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
+
         def _indicator(data):
             roe_year = QA.EMA(data['q_dt_roe'], 4)*4
             roe_half_year = QA.EMA(data['q_dt_roe'], 2)*4
@@ -21,14 +27,21 @@ class simpleValued:
             asset_rise_2year = data['equity_yoy'].shift(4)*data['equity_yoy']
             # 近3年净资产收益率
             asset_rise_3year = data['equity_yoy'].shift(8) * asset_rise_2year
-            equity_pb6 = np.power(asset_rise_3year,6);
-            equity_pb7 = np.power(asset_rise_3year, 7);
-            roe_year_pb6 = np.power(roe_year, 6);
-            roe_year_pb7 = np.power(roe_year, 7);
+            data.loc[:,'equity_pb6'] = np.power(asset_rise_3year,6);
+            data.loc[:, 'equity_pb7'] = np.power(asset_rise_3year, 7);
+            data.loc[:, 'roe_year_pb6'] = np.power(roe_year, 6);
+            data.loc[:, 'roe_year_pb7'] = np.power(roe_year, 7);
+            return data
 
-        finacial = finacial.groupby('ts_code').apply(_indicator)
+        self.finacial = self.finacial.groupby('ts_code').apply(_indicator)
 
-        basic = pro.QA_SU_save_stock_daily_basic(start=start,end=end)
+
+        basic = self.basic
+        basic.equity_pb6 = None
+        basic.equity_pb7 = None
+        basic.roe_year_pb6 = None
+        basic.roe_year_pb7 = None
+        basic.equity_rejust = 0
 
         #净资产变动调整
         def equity_rejust(data,fin):
@@ -37,49 +50,45 @@ class simpleValued:
 
         def _indicatorCp(data):
             fin = finacial.loc[data[0]]
+            ast = self.asset.loc[data[0]]
             for index,rp in fin.iterrows():
-                if index == 0:
-
-                    data.loc['trade_date'<rp.ann_date].equity_pb6 = rp.equity_pb6
+                #equity_rejust
+                if index+1 != fin.length:
+                    query = (data.trade_date >= rp.ann_date) & (data.trade_date < rp.iloc[index + 1].ann_date)
+                    data.loc[query].equity_pb6 = rp.equity_pb6
+                    data.loc[query].equity_pb7 = rp.equity_pb7
+                    data.loc[query].roe_year_pb6 = rp.roe_year_pb6
+                    data.loc[query].roe_year_pb7 = rp.roe_year_pb7
+                    data.loc[query].equity_rejust = data.loc[query].total_mv/data.loc[query].pb*10000/ast[index].total_hldr_eqy_exc_min_int
                 else:
-                    data.loc['trade_date' < rp.ann_date & 'trade_date' > rp.iloc[index-1].ann_date].equity_pb6 = rp.equity_pb6
+                    query = data.trade_date >= rp.ann_date
+                    data.loc[query].equity_pb6 = rp.equity_pb6
+                    data.loc[query].equity_pb7 = rp.equity_pb7
+                    data.loc[query].roe_year_pb6 = rp.roe_year_pb6
+                    data.loc[query].roe_year_pb7 = rp.roe_year_pb7
+                    data.loc[query].equity_rejust = data.loc[query].total_mv / data.loc[query].pb * 10000 / ast[index].total_hldr_eqy_exc_min_int
+            return data
 
         # 获取每日equity_pb6、roe_year_pb6
-        basic = basic.groupby('ts_code').apply(_indicatorCp)
+        self.basic = basic.groupby('ts_code').apply(_indicatorCp)
 
         #每日统计指标
         def _dailystat(data):
             pass
-        basic = basic.groupby('trade_date').apply(_dailystat)
+        self.dailymarket = self.basic.groupby('trade_date').apply(_dailystat)
 
 
 
 
-    def top5_valued(dataframe, start, end):
+    def top5_valued(self,df):
         """
         简单价值判断，近1年 roe,近半年roe，近3年净资产增速，近2年净资产增速。价值法6年pb、7年pb
         """
-        codes = dataframe.code.unique()
-        st = QA.QA_util_datetime_to_strdate(QA.QA_util_add_months(start,-36))
-        dt = QA.QA_fetch_financial_report_adv(codes, st, end, ltype='CN')
-        roe_year = QA.EMA(dt.data['006'],4)
-        roe_half_year = QA.EMA(dt.data['006'], 2)
-        asset_rise_3year = QA.EMA(dt.data['006'], 12)
-        asset_rise_2year = QA.EMA(dt.data['006'], 8)
-        value_pb6 = asset_rise_3year.pow(6)
-        value_pb7 = asset_rise_3year.pow(7)
-        roe_year_pb6 = roe_year.pow(6)
-        roe_year_pb7 = roe_year.pow(7)
-
-
-        # DIFF = QA.EMA(CLOSE, SHORT) - QA.EMA(CLOSE, LONG)
-        # DEA = QA.EMA(DIFF, M)
-        # MACD = 2*(DIFF-DEA)
-        #
-        # CROSS_JC = QA.CROSS(DIFF, DEA)
-        # CROSS_SC = QA.CROSS(DEA, DIFF)
-        # ZERO = 0
-        # return pd.DataFrame({'DIFF': DIFF, 'DEA': DEA, 'MACD': MACD, 'CROSS_JC': CROSS_JC, 'CROSS_SC': CROSS_SC, 'ZERO': ZERO})
+        basic = self.basic[self.basic==df[0].code]
+        dailymarket = self.dailymarket[(self.dailymarket.statype=='all')&(self.dailymarket.trade_date>=basic[0].trade_date)&(self.dailymarket.trade_date<=basic[-1].trade_date)]
+        basic.equity_pb6/basic.pb
+        td = basic.merge(dailymarket[['trade_date', 'equity_pb6top5', 'equity_pb7top5','roe_year_pb6top5','roe_year_pb7top5']], left_on='trade_date', right_on='trade_date', how='left').set_index(basic.index)
+        td
 
 if __name__ == '__main__':
     finacial = pro.QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
