@@ -68,6 +68,33 @@ def QA_SU_save_stock_terminated(client=DATABASE):
     print(" 保存终止上市股票列表 到 stock_terminated collection， OK")
 
 
+def QA_SU_stock_info():
+    '''
+    基本信息
+ts_code	str	TS代码
+symbol	str	股票代码
+name	str	股票名称
+area	str	所在地域
+industry	str	所属行业
+fullname	str	股票全称
+enname	str	英文全称
+market	str	市场类型 （主板/中小板/创业板）
+exchange	str	交易所代码
+curr_type	str	交易货币
+list_status	str	上市状态： L上市 D退市 P暂停上市
+list_date	str	上市日期
+delist_date	str	退市日期
+is_hs	str	是否沪深港通标的，N否 H沪股通 S深股通
+
+            add by minijjlk
+
+        在命令行工具 quantaxis 中输入 save stock_info_tushare 中的命令
+        :param client:
+        :return:
+        '''
+    pro = ts.pro_api()
+    return pro.stock_basic()
+
 
 def QA_SU_save_stock_daily_basic(start_day='20010101',client=DATABASE,force=False):
     '''
