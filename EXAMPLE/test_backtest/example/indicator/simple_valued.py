@@ -11,6 +11,7 @@ class simpleValued:
         self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
         self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
         self.basic = pro.QA_fetch_get_dailyindicator(start=start,end=end)
+        self.stock = pro.QA_SU_stock_info()
         self.dailymarket = None
 
 
@@ -73,8 +74,15 @@ class simpleValued:
         self.basic = basic.groupby('ts_code').apply(_indicatorCp)
 
         #每日统计指标
-        def _dailystat(data):
-            pass
+        def _dailystat(df):
+            rs = []
+            non_finacial = self.stock[(self.stock != '银行') & (self.stock != '证券')]
+            non_finacial.describe[.05, .15, .25,.5,75]
+            non_finacial = non_finacial.T
+            non_finacial.statype ='non_finacial'
+            non_finacial.index = [df[0].trade_date]
+            rs.append(non_finacial)
+            return pd.concat(rs)
         self.dailymarket = self.basic.groupby('trade_date').apply(_dailystat)
 
 
@@ -83,14 +91,21 @@ class simpleValued:
         """
         简单价值判断，近1年 roe,近半年roe，近3年净资产增速，近2年净资产增速。价值法6年pb、7年pb
         """
-        basic = self.basic[self.basic==df[0].code]
-        dailymarket = self.dailymarket[(self.dailymarket.statype=='all')&(self.dailymarket.trade_date>=basic[0].trade_date)&(self.dailymarket.trade_date<=basic[-1].trade_date)]
-        basic.equity_pb6/basic.pb
-        td = basic.merge(dailymarket[['trade_date', 'equity_pb6top5', 'equity_pb7top5','roe_year_pb6top5','roe_year_pb7top5']], left_on='trade_date', right_on='trade_date', how='left').set_index(basic.index)
-        td
+        # basic = self.basic[self.basic==df[0].code]
+        # dailymarket = self.dailymarket[(self.dailymarket.statype=='all')&(self.dailymarket.trade_date>=basic[0].trade_date)&(self.dailymarket.trade_date<=basic[-1].trade_date)]
+        # basic.equity_pb6/basic.pb
+        # td = basic.merge(dailymarket[['trade_date', 'equity_pb6top5', 'equity_pb7top5','roe_year_pb6top5','roe_year_pb7top5']], left_on='trade_date', right_on='trade_date', how='left').set_index(basic.index)
+        # td
+        def _top5(df):
+            dailymarket = self.dailymarket[(self.dailymarket.statype == 'non-finacial') & (self.dailymarket.trade_date == df[0].trade_date)]
+            buy = df.equity_pb6/df.pb - dailymarket.equity_pb6top5
+            sell = df.equity_pb6/df.pb - dailymarket.equity_pb6top15
+            return pd.DataFrame({'buy': buy, 'sell': sell})
+        return self.basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
 
 if __name__ == '__main__':
-    finacial = pro.QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
+    #finacial = pro.QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
+    sv  = simpleValued('20180101','20180930')
 
 
     def _indicator(data):
