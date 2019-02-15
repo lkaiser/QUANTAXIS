@@ -91,8 +91,8 @@ if __name__ == '__main__':
 
     # backtest_code_list = QA.QA_fetch_stock_block_adv().code[0:10]
     backtest_code_list = '000001'
-    backtest_start_date = '2018-01-01'
-    backtest_end_date = '2018-08-21'
+    backtest_start_date = '20180101'
+    backtest_end_date = '20180821'
 
     Broker = QA.QA_BacktestBroker()
     AC = QA.QA_Account(

@@ -12,15 +12,16 @@ class simpleValued:
     def __init__(self,start,end):
         self.start = start
         self.end = end
-        self.basic_temp_name = 'basic_temp_' + datetime.datetime.now().strftime('%Y-%m-%d') +'.pkl'
+        self.basic_temp_name = 'basic_temp_' +start+'_'+end +'.pkl'
         start_2years_bf = str(int(start[0:4]) - 3)
         self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
-        print(self.finacial.head())
+        #print(self.finacial.head())
         self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
         if (os.path.isfile(self.basic_temp_name)):
             self.basic = pd.read_pickle(self.basic_temp_name)
         else:
             basic = pro.QA_fetch_get_dailyindicator(start=start,end=end)
+            #print(basic.head().loc[:,['ts_code','trade_date','close','pe']])
             self.basic = basic.sort_values(['ts_code','trade_date'], ascending = True)
         self.stock = pro.QA_SU_stock_info()
         self.dailymarket = None
@@ -65,9 +66,18 @@ class simpleValued:
             data.loc[:,'netasset'] = data.ebit/data.ebit_ps*data.bps #净资产
             data.loc[:,'cash'] = data.ebit/data.ebit_ps*data.cfps #现金流
             data.loc[:,'q_ocf'] = data.q_opincome*data.q_ocf_to_or #单季度经营活动产生的现金流量
-            data.loc[:,'q4_ocf'] = QA.EMA(data['q_ocf'], 4)
-            data.loc[:, 'q4_opincome'] = QA.EMA(data['q_opincome'], 4)
-            data.loc[:, 'q4_dtprofit'] = QA.EMA(data['q_dtprofit'], 4)
+            if data['q_ocf'].isnull().all():
+                data.loc[:, 'q4_ocf'] = np.nan
+            else:
+                data.loc[:,'q4_ocf'] = QA.EMA(data['q_ocf'], 4)
+            if data['q_opincome'].isnull().all():
+                data.loc[:, 'q4_opincome'] = np.nan
+            else:
+                data.loc[:, 'q4_opincome'] = QA.EMA(data['q_opincome'], 4)
+            if data['q_dtprofit'].isnull().all():
+                data.loc[:, 'q4_dtprofit'] = np.nan
+            else:
+                data.loc[:, 'q4_dtprofit'] = QA.EMA(data['q_dtprofit'], 4)
             return data
 
         self.finacial = self.finacial.groupby('ts_code').apply(_indicator)
@@ -91,20 +101,21 @@ class simpleValued:
                     data.loc[query, ['roe_half_year_pb7']] = fin.iloc[i].roe_half_year_pb7
                     data.loc[query, ['roe_year_pb7']] = fin.iloc[i].roe_year_pb7
                     data.loc[query, ['roe_half_year_pb7']] = fin.iloc[i].roe_half_year_pb7
-                    data.loc[query, ['equity_rejust']] = np.round(data.loc[query].total_mv / data.loc[query].pb * 10000 /fin.iloc[i].netasset.values ,2)
+                    data.loc[query, ['equity_rejust']] = np.round(data.loc[query].total_mv / data.loc[query].pb * 10000 /fin.iloc[i].netasset ,2)
                 else:
                     query = data.trade_date >= fin.iloc[i].ann_date
                     data.loc[query, ['equity2_pb7']] = fin.iloc[i].equity2_pb7
                     data.loc[query, ['equity3_pb7']] = fin.iloc[i].equity3_pb7
                     data.loc[query, ['roe_half_year_pb7']] = fin.iloc[i].roe_half_year_pb7
                     data.loc[query, ['roe_year_pb7']] = fin.iloc[i].roe_year_pb7
-                    data.loc[query, ['equity_rejust']] = np.round(data.loc[query].total_mv / data.loc[query].pb * 10000 / fin.iloc[i].netasset.values,2)
+                    data.loc[query, ['equity_rejust']] = np.round(data.loc[query].total_mv / data.loc[query].pb * 10000 / fin.iloc[i].netasset,2)
             #print(basic.loc[:,['equity_pb6','equity_pb7','roe_year_pb6','roe_year_pb7']].head())
             return data
 
         # 获取每日equity_pb6、roe_year_pb6
-        self.basic = basic.groupby('ts_code').apply(_indicatorCp)
-        self.basic.to_pickle(self.basic_temp_name)
+        if not (os.path.isfile(self.basic_temp_name)):
+            self.basic = basic.groupby('ts_code').apply(_indicatorCp)
+            self.basic.to_pickle(self.basic_temp_name)
 
 
 
@@ -130,7 +141,7 @@ class simpleValued:
         self.dailymarket = self.basic.groupby('trade_date').apply(_dailystat)
 
 
-    def non_finacal_top5_valued(self,df):
+    def non_finacal_top5_valued(self):
         """
         简单价值判断，近1年 roe,近半年roe，近3年净资产增速，近2年净资产增速。价值法6年pb、7年pb
         """
@@ -139,7 +150,7 @@ class simpleValued:
         # basic.equity_pb6/basic.pb
         # td = basic.merge(dailymarket[['trade_date', 'equity_pb6top5', 'equity_pb7top5','roe_year_pb6top5','roe_year_pb7top5']], left_on='trade_date', right_on='trade_date', how='left').set_index(basic.index)
         # td
-        non_finacial_codes = self.stock[(self.stock != '银行') & (self.stock.industry != '保险')].ts_code.values
+        non_finacial_codes = self.stock[(self.stock.industry != '银行') & (self.stock.industry != '保险')].ts_code.values
         basic = self.basic[self.basic.ts_code.isin(non_finacial_codes)]
 
         def _trash_fiter(df):
@@ -148,15 +159,17 @@ class simpleValued:
             ast = self.asset.loc[self.asset.ts_code == df.name]
             rm = None
             rms = []
-            fin.loc[:, 'rmflag'] = 0
-            fin.loc[fin.q4_ocf/fin.q4_opincome<0.6] = 1 #经营活动现金流/经营活动净利润 <0.6的不要了
-            fin.loc[fin.q4_opincome / fin.q4_dtprofit < 0.7] = 1  # 经营活动净收益/净利润 <0.7的不要了（投资收益什么的不靠谱）
-            ast.loc[:, 'rmflag'] = 0
-            ast.loc[ast.goodwill / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 商誉占比
-            ast.loc[ast.inventories / ast.total_hldr_eqy_exc_min_int > 0.3,'rmflag'] = 1  # 存货占比
-            ast.loc[(ast.notes_receiv + ast.accounts_receiv) / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 应收占比
+            if fin.shape[0]:
+                fin.loc[:, 'rmflag'] = 0
+                fin.loc[fin.q4_ocf/fin.q4_opincome<0.6] = 1 #经营活动现金流/经营活动净利润 <0.6的不要了
+                fin.loc[fin.q4_opincome / fin.q4_dtprofit < 0.7] = 1  # 经营活动净收益/净利润 <0.7的不要了（投资收益什么的不靠谱）
+            if ast.shape[0]:
+                ast.loc[:, 'rmflag'] = 0
+                ast.loc[ast.goodwill / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 商誉占比
+                ast.loc[ast.inventories / ast.total_hldr_eqy_exc_min_int > 0.3,'rmflag'] = 1  # 存货占比
+                ast.loc[(ast.notes_receiv + ast.accounts_receiv) / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 应收占比
 
-            for i in range(0, ast.shape[0]):
+            for i in range(ast.shape[0]):
                 if ast.iloc[i].rmflag == 1 and not rm:
                     rm = ast.iloc[i].ann_date
                 if ast.iloc[i].rmflag == 0 and not rm:
@@ -166,7 +179,7 @@ class simpleValued:
                 rms.append((rm, self.end))
                 rm = None
 
-            for i in range(0, fin.shape[0]):
+            for i in range(fin.shape[0]):
                 if fin.iloc[i].rmflag == 1 and not rm:
                     rm = fin.iloc[i].ann_date
                 if fin.iloc[i].rmflag == 0 and not rm:
@@ -189,7 +202,7 @@ class simpleValued:
             sell = dailymarket[dailymarket.category=='equity2_pb7_pb'].per95 - df.equity2_pb7/df.pb - 0.3
             return pd.DataFrame({'buy': buy, 'sell': sell})
 
-        return basic.groupby('ts_code').apply(_top5).set_index(['trade_date', 'ts_code'])
+        return basic.groupby('ts_code',as_index=False).apply(_top5).set_index(['trade_date', 'ts_code'])
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
 
     def price_trend(self,df):

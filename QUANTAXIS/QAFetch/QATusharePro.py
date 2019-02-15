@@ -71,7 +71,6 @@ def QA_fetch_get_finindicator(start, end,code=None,collections=DATABASE.stock_re
     cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("end_date",1)])
     data = []
     i = 0
-    tam = cursor.count()
     for post in cursor:
         i = i+1
         #print(post)
@@ -127,7 +126,7 @@ def QA_fetch_get_dailyindicator(start, end,code=None,collections=DATABASE.stock_
 
 if __name__ == '__main__':
     fin = QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
-    print(len(fin))
+    #print(len(fin))
 
 # test
 
