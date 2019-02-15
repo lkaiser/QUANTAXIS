@@ -193,14 +193,15 @@ class simpleValued:
             for k in rms:
                 data = data[~((data.trade_date >= k[0]) & (data.trade_date < k[1]))]
                 return data
-        basic = basic.groupby('ts_code').apply(_trash_fiter)
+        basic = basic.groupby('ts_code',as_index=False).apply(_trash_fiter)
 
 
         def _top5(df):
-            dailymarket = self.dailymarket[(self.dailymarket.statype == 'non-finacial') & (self.dailymarket.trade_date == df.name)]
-            buy = df.equity2_pb7/df.pb - dailymarket[dailymarket.category=='equity2_pb7_pb'].per95
-            sell = dailymarket[dailymarket.category=='equity2_pb7_pb'].per95 - df.equity2_pb7/df.pb - 0.3
-            return pd.DataFrame({'buy': buy, 'sell': sell})
+            dailymarket = self.dailymarket.loc[df.name]
+            dailymarket = dailymarket[dailymarket.statype == 'non-finacial']
+            df.loc[:,'buy'] = df.equity2_pb7/df.pb - dailymarket[dailymarket.category=='equity2_pb7_pb'].per95
+            df.loc[:,'sell'] = dailymarket[dailymarket.category=='equity2_pb7_pb'].per95 - df.equity2_pb7/df.pb - 0.3
+            return df
 
         return basic.groupby('ts_code',as_index=False).apply(_top5).set_index(['trade_date', 'ts_code'])
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
