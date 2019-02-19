@@ -197,11 +197,12 @@ class simpleValued:
 
 
         def _top5(df):
-            dailymarket = self.dailymarket.loc[df.name]
-            dailymarket = dailymarket[dailymarket.statype == 'non-finacial']
-            df.loc[:,'buy'] = df.equity2_pb7/df.pb - dailymarket[dailymarket.category=='equity2_pb7_pb'].per95
-            df.loc[:,'sell'] = dailymarket[dailymarket.category=='equity2_pb7_pb'].per95 - df.equity2_pb7/df.pb - 0.3
-            return df
+            if df.name in self.dailymarket:
+                dailymarket = self.dailymarket.loc[df.name]
+                dailymarket = dailymarket[dailymarket.statype == 'non-finacial']
+                df.loc[:,'buy'] = df.equity2_pb7/df.pb - dailymarket[dailymarket.category=='equity2_pb7_pb'].per95
+                df.loc[:,'sell'] = dailymarket[dailymarket.category=='equity2_pb7_pb'].per95 - df.equity2_pb7/df.pb - 0.3
+                return df
 
         return basic.groupby('ts_code',as_index=False).apply(_top5).set_index(['trade_date', 'ts_code'])
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
