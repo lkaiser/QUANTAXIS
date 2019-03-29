@@ -62,24 +62,71 @@ def get_pro():
 
 
 
-def QA_fetch_get_finindicator(code,start, end,collections=DATABASE.stock_report_finindicator_tushare):
+def QA_fetch_get_finindicator(start, end,code=None,collections=DATABASE.stock_report_finindicator_tushare):
     query = { "end_date": {
             "$lte": end,
             "$gte": start}}
     if code:
-        query['code'] = {'$in': code}
-    cursor = collections.find(query, {"_id": 0}, batch_size=10000)
+        query['ts_code'] = {'$in': code}
+    cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("end_date",1)])
+    data = []
+    i = 0
+    for post in cursor:
+        i = i+1
+        #print(post)
+        data.append(post)
+    return pd.DataFrame(data).sort_values(['ts_code','end_date'], ascending = True)
 
-    return pd.DataFrame([item for item in cursor])
+def QA_fetch_get_assetAliability(start, end,code=None,collections=DATABASE.stock_report_assetliability_tushare):
+    query = {"end_date": {
+        "$lte": end,
+        "$gte": start}}
+    if code:
+        query['ts_code'] = {'$in': code}
+    cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("end_date",1)])
+
+    return pd.DataFrame([item for item in cursor]).sort_values(['ts_code','end_date'], ascending = True)
+
+def QA_fetch_get_cashflow(start, end,code=None,collections=DATABASE.stock_report_cashflow_tushare):
+    query = {"end_date": {
+        "$lte": end,
+        "$gte": start}}
+    if code:
+        query['ts_code'] = {'$in': code}
+    cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("end_date",1)])
+
+    return pd.DataFrame([item for item in cursor]).sort_values(['ts_code','end_date'], ascending = True)
+
+def QA_fetch_get_income(start, end,code=None,collections=DATABASE.stock_report_income_tushare):
+    query = {"end_date": {
+        "$lte": end,
+        "$gte": start}}
+    if code:
+        query['ts_code'] = {'$in': code}
+    cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("end_date",1)])
+
+    return pd.DataFrame([item for item in cursor]).sort_values(['ts_code','end_date'], ascending = True)
+
+def QA_SU_stock_info():
+    set_token('0f7da64f6c87dfa58456e0ad4c7ccf31d6c6e89458dc5b575e028c64')
+    pro = get_pro()
+    return pro.stock_basic()
 
 
-def QA_fetch_get_dailyindicator(code,start, end,collections=DATABASE.stock_daily_basic_tushare):
-    cursor = collections.find({
-        'code': {'$in': code}, "trade_date": {
-            "$lte": end,
-            "$gte": start}}, {"_id": 0}, batch_size=10000)
 
-    return pd.DataFrame([item for item in cursor])
+def QA_fetch_get_dailyindicator(start, end,code=None,collections=DATABASE.stock_daily_basic_tushare):
+    query = {"trade_date": {
+        "$lte": end,
+        "$gte": start}}
+    if code:
+        query['ts_code'] = {'$in': code}
+    cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("trade_date",1)])
+
+    return pd.DataFrame([item for item in cursor])#sort_values(['ts_code','trade_date'], ascending = True)
+
+if __name__ == '__main__':
+    fin = QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
+    #print(len(fin))
 
 # test
 
