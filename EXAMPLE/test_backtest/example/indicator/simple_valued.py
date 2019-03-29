@@ -82,14 +82,6 @@ class simpleValued:
 
         self.finacial = self.finacial.groupby('ts_code').apply(_indicator)
 
-
-        basic = self.basic
-        basic.loc[:,'equity2_pb7'] = 0
-        basic.loc[:,'equity3_pb7'] = 0
-        basic.loc[:,'roe_year_pb7'] = 0
-        basic.loc[:, 'roe_half_year_pb7'] = 0
-        basic.loc[:,'equity_rejust'] = 0
-
         def _indicatorCp(data):
             fin = self.finacial[self.finacial.ts_code==data.name]
             ast = self.asset.loc[self.asset.ts_code==data.name]
@@ -114,6 +106,12 @@ class simpleValued:
 
         # 获取每日equity_pb6、roe_year_pb6
         if not (os.path.isfile(self.basic_temp_name)):
+            basic = self.basic
+            basic.loc[:, 'equity2_pb7'] = 0
+            basic.loc[:, 'equity3_pb7'] = 0
+            basic.loc[:, 'roe_year_pb7'] = 0
+            basic.loc[:, 'roe_half_year_pb7'] = 0
+            basic.loc[:, 'equity_rejust'] = 0
             self.basic = basic.groupby('ts_code').apply(_indicatorCp)
             self.basic.to_pickle(self.basic_temp_name)
 
@@ -121,7 +119,7 @@ class simpleValued:
 
         #每日统计指标
         def _dailystat(df):
-            rs = []
+            #rs = []
             non_finacial_codes = self.stock[(self.stock.industry != '银行') & (self.stock.industry != '保险')].ts_code.values
             non_finacial = df[df.ts_code.isin(non_finacial_codes)]
 
@@ -135,8 +133,9 @@ class simpleValued:
             st.columns = ['category','cnt','mean','std','min','per25','per50','per75','per85','per95','max']
             st.loc[:,'statype'] ='non_finacial'
             st.index = [df.name]*4
-            rs.append(st)
-            return pd.concat(rs)
+            #rs.append(st)
+            #return pd.concat(rs)
+            return st
         #print(self.basic.loc[:,['equity_pb6','equity_pb7','roe_year_pb6','roe_year_pb7']].head())
         self.dailymarket = self.basic.groupby('trade_date').apply(_dailystat)
 
@@ -161,15 +160,15 @@ class simpleValued:
             rms = []
             if fin.shape[0]:
                 fin.loc[:, 'rmflag'] = 0
-                fin.loc[fin.q4_ocf/fin.q4_opincome<0.6] = 1 #经营活动现金流/经营活动净利润 <0.6的不要了
-                fin.loc[fin.q4_opincome / fin.q4_dtprofit < 0.7] = 1  # 经营活动净收益/净利润 <0.7的不要了（投资收益什么的不靠谱）
+                fin.loc[fin.q4_ocf/fin.q4_opincome<0.6,'rmflag'] = 1 #经营活动现金流/经营活动净利润 <0.6的不要了
+                fin.loc[fin.q4_opincome / fin.q4_dtprofit < 0.7,'rmflag'] = 1  # 经营活动净收益/净利润 <0.7的不要了（投资收益什么的不靠谱）
             if ast.shape[0]:
                 ast.loc[:, 'rmflag'] = 0
                 ast.loc[ast.goodwill / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 商誉占比
                 ast.loc[ast.inventories / ast.total_hldr_eqy_exc_min_int > 0.3,'rmflag'] = 1  # 存货占比
                 ast.loc[(ast.notes_receiv + ast.accounts_receiv) / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 应收占比
 
-            for i in range(ast.shape[0]):
+            for i in range(ast.shape[0]): #举例 20171231 0; 20180331  1;20180630  1;20180930 0;20181231 1  ,则  20180331-20180930之间,20181231-end之间的全删除
                 if ast.iloc[i].rmflag == 1 and not rm:
                     rm = ast.iloc[i].ann_date
                 if ast.iloc[i].rmflag == 0 and not rm:
@@ -179,7 +178,7 @@ class simpleValued:
                 rms.append((rm, self.end))
                 rm = None
 
-            for i in range(fin.shape[0]):
+            for i in range(fin.shape[0]): #逻辑同上面的ast，可以和ast里的日期重复，但凡不符合都删除
                 if fin.iloc[i].rmflag == 1 and not rm:
                     rm = fin.iloc[i].ann_date
                 if fin.iloc[i].rmflag == 0 and not rm:
@@ -197,14 +196,18 @@ class simpleValued:
 
 
         def _top5(df):
-            if df.name in self.dailymarket:
-                dailymarket = self.dailymarket.loc[df.name]
-                dailymarket = dailymarket[dailymarket.statype == 'non-finacial']
-                df.loc[:,'buy'] = df.equity2_pb7/df.pb - dailymarket[dailymarket.category=='equity2_pb7_pb'].per95
-                df.loc[:,'sell'] = dailymarket[dailymarket.category=='equity2_pb7_pb'].per95 - df.equity2_pb7/df.pb - 0.3
-                return df
+            '''equity2_pb7  2年净资产增速对应pb, /实际pb 得出价值倍数，找出价值倍数大于95%数据，这个指标十有八九不靠谱,还不如用roe_year_pb7'''
+            if df.name in sv.dailymarket.index.levels[0]:
+                dailymarket = sv.dailymarket.loc[df.name]
+                if (dailymarket[dailymarket.statype == 'non_finacial'].shape[0] == 0):
+                    print(dailymarket)
+                else:
+                    dailymarket = dailymarket[dailymarket.statype == 'non_finacial']
+                    df.loc[:, 'buy'] = df.equity2_pb7 / df.pb - dailymarket[dailymarket.category == 'equity2_pb7_pb'].per95[0]
+                    df.loc[:, 'sell'] = dailymarket[dailymarket.category == 'equity2_pb7_pb'].per95[0] - df.equity2_pb7 / df.pb - 0.3
+                    return df
 
-        return basic.groupby('ts_code',as_index=False).apply(_top5).set_index(['trade_date', 'ts_code'])
+        return basic.groupby('trade_date',as_index=False).apply(_top5)#.set_index(['trade_date', 'ts_code'])
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
 
     def price_trend(self,df):
@@ -215,6 +218,7 @@ if __name__ == '__main__':
     #finacial = pro.QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
     sv  = simpleValued('20180101','20180930')
     sv.indcators_prepare()
+    df = sv.non_finacal_top5_valued()
 
     #asset = pro.QA_fetch_get_assetAliability(start='20160101', end='20180930')
     #print(asset.head())
