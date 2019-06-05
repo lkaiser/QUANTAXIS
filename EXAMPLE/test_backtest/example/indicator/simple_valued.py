@@ -197,8 +197,8 @@ class simpleValued:
 
         def _top5(df):
             '''equity2_pb7  2年净资产增速对应pb, /实际pb 得出价值倍数，找出价值倍数大于95%数据，这个指标十有八九不靠谱,还不如用roe_year_pb7'''
-            if df.name in sv.dailymarket.index.levels[0]:
-                dailymarket = sv.dailymarket.loc[df.name]
+            if df.name in self.dailymarket.index.levels[0]:
+                dailymarket = self.dailymarket.loc[df.name]
                 if (dailymarket[dailymarket.statype == 'non_finacial'].shape[0] == 0):
                     print(dailymarket)
                 else:
@@ -207,7 +207,7 @@ class simpleValued:
                     df.loc[:, 'sell'] = dailymarket[dailymarket.category == 'equity2_pb7_pb'].per95[0] - df.equity2_pb7 / df.pb - 0.3
                     return df
 
-        return basic.groupby('trade_date',as_index=False).apply(_top5)#.set_index(['trade_date', 'ts_code'])
+        return basic.groupby('trade_date',as_index=False).apply(_top5).set_index(['trade_date', 'ts_code'],drop=False)
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
 
     def price_trend(self,df):

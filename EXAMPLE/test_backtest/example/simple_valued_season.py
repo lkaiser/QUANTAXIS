@@ -3,6 +3,8 @@ import math
 import QUANTAXIS as QA
 from QUANTAXIS.QAFetch import QATusharePro as pro
 from indicator.simple_valued import simpleValued
+from QUANTAXIS.QAData import QA_DataStruct_Stock_day
+import pandas as pd
 
 try:
     if QA.__version__>'1.1.0':
@@ -27,49 +29,72 @@ def simple_backtest(AC:QA.QA_Account, code, start:str, end:str):
     #
     #DATA = pro.QA_SU_save_stock_daily(code, start, end)
     # todo 计算信号
-    sv = simpleValued(start,end)
-    sv.indcators_prepare()
-    stock_signal = sv.non_finacal_top5_valued()
-    for item in stock_signal.index.levels[0]:
+    #sv = simpleValued(start,end)
+    #sv.indcators_prepare()
+    #stock_signal = sv.non_finacal_top5_valued()
+    #stock_signal.to_pickle('test.pkl')
+    stock_signal = pd.read_pickle('test.pkl')
+    #print(stock_signal.head())
+    stock_signal.loc[:,'open'] = stock_signal.loc[:,'high'] = stock_signal.loc[:,'low'] = stock_signal['close']
+    stock_signal.loc[:,'vol'] = 10000000
+    #stock_signal.loc[:, 'code'] = stock_signal['ts_code']
+    for item in stock_signal.index.levels[0]:#按日期循环，stock_signal 多重索引  trade_date,ts_code
         peroid_item = stock_signal.xs(item,
                 level=0,
                 drop_level=False)
         # 可卖数量
         buy_candidates = peroid_item[peroid_item.buy>0]
         sell_candidates = peroid_item[peroid_item.sell<0]
-        elimits = AC.hold_table().code.diff(peroid_item.ts_code)#基本面发生变化，直接清空
+        elimits = []
+        if not AC.hold_table().empty:
+            #print(type(peroid_item.ts_code))
+            elimits = set(AC.hold_table().index).difference(peroid_item.ts_code.values)#mutiple index  index0 为日期 index1 为ts_code基本面发生变化，直接清空
         if not sell_candidates.empty or not elimits.empty:
-            sells = sell_candidates.ts_code.intersection(AC.hold_table().code).union(elimits)
+            sells = set(sell_candidates.ts_code).intersection([] if AC.hold_table().empty else set(AC.hold_table().index)).union(elimits)
             for code in sells:
                 cur_account_sotck_code_sell_available_amount = AC.sell_available.get(code, 0)
-                order = AC.send_order(
-                    code=code, time=peroid_item.trade_date[0], towards=QA.ORDER_DIRECTION.SELL,
-                    order_model=QA.ORDER_MODEL.CLOSE, amount_model=QA.AMOUNT_MODEL.BY_AMOUNT,
-                    amount=cur_account_sotck_code_sell_available_amount, price=0,
-                )
-                Broker.receive_order(QA.QA_Event(order=order))
-                trade_mes = Broker.query_orders(AC.account_cookie, 'filled')
-                res = trade_mes.loc[order.account_cookie, order.realorder_id]
-                order.trade(res.trade_id, res.trade_price,
-                            res.trade_amount, res.trade_time)
+                if(cur_account_sotck_code_sell_available_amount >0):
+                    time = peroid_item.trade_date[0]
+                    time = time[0:4] + '-' + time[4:6] + '-' + time[6:8]
+                    print(cur_account_sotck_code_sell_available_amount)
+                    order = AC.send_order(
+                        code=code, time=time, towards=QA.ORDER_DIRECTION.SELL,
+                        order_model=QA.ORDER_MODEL.CLOSE, amount_model=QA.AMOUNT_MODEL.BY_AMOUNT,
+                        amount=cur_account_sotck_code_sell_available_amount, price=0,
+                    )
+                    print("#########here"+str(order))
+                    Broker.receive_order(QA.QA_Event(order=order))
+                    trade_mes = Broker.query_orders(AC.account_cookie, 'filled')
+                    res = trade_mes.loc[order.account_cookie, order.realorder_id]
+                    order.trade(res.trade_id, res.trade_price,
+                                res.trade_amount, res.trade_time)
         cash = AC.cash_available
-        if cash and buy_candidates:
+        if cash and not buy_candidates.empty:
             buys = buy_candidates[0:5] if len(buy_candidates)>5  else buy_candidates
-            for code in buys:
-                avgPrice = peroid_item[peroid_item.code==code].close
-                maxMoney = cash/len(buy_candidates)
-                order = AC.send_order(
-                    code=code, time=peroid_item.trade_date[0], towards=QA.ORDER_DIRECTION.BUY,
-                    order_model=QA.ORDER_MODEL.MARKET,
-                    amount_model=QA.AMOUNT_MODEL.BY_MONEY,
-                    money=maxMoney,
-                    price=avgPrice,
-                )
-                Broker.receive_order(QA.QA_Event(order=order))
-                trade_mes = Broker.query_orders(AC.account_cookie, 'filled')
-                res = trade_mes.loc[order.account_cookie, order.realorder_id]
-                order.trade(res.trade_id, res.trade_price,
-                            res.trade_amount, res.trade_time)
+            #print(buys)
+            for code in buys.ts_code:
+                #print("code="+code)
+                avgPrice = peroid_item[peroid_item.ts_code==code].close[0]
+                maxMoney = cash/len(buys)
+                time = peroid_item.trade_date[0]
+                time = time[0:4]+'-'+time[4:6]+'-'+time[6:8]
+                if maxMoney>0:
+                    print('maxMoney='+str(maxMoney))
+                    order = AC.send_order(
+                        code=code, time=time, towards=QA.ORDER_DIRECTION.BUY,
+                        order_model=QA.ORDER_MODEL.CLOSE,
+                        amount_model=QA.AMOUNT_MODEL.BY_MONEY,
+                        money=maxMoney,
+                        price=avgPrice,
+                    )
+                    #print(order)
+                    if order is not None and order:
+                        sd = peroid_item[peroid_item.ts_code==code].loc[:,['open','close','high','low','vol']]
+                        Broker.receive_order(QA.QA_Event(order=order,market_data=QA_DataStruct_Stock_day(sd)))
+                        trade_mes = Broker.query_orders(AC.account_cookie, 'filled')
+                        res = trade_mes.loc[order.account_cookie, order.realorder_id]
+                        order.trade(res.trade_id, res.trade_price,
+                                    res.trade_amount, res.trade_time)
         AC.settle()
 
 if __name__ == '__main__':
@@ -92,7 +117,7 @@ if __name__ == '__main__':
     # backtest_code_list = QA.QA_fetch_stock_block_adv().code[0:10]
     backtest_code_list = '000001'
     backtest_start_date = '20180101'
-    backtest_end_date = '20180821'
+    backtest_end_date = '20180421'
 
     Broker = QA.QA_BacktestBroker()
     AC = QA.QA_Account(
