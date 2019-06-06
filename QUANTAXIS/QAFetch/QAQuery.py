@@ -36,6 +36,7 @@ from QUANTAXIS.QAUtil import (DATABASE, QA_Setting, QA_util_date_stamp,
                               QA_util_time_stamp, QA_util_to_json_from_pandas,
                               trade_date_sse)
 from QUANTAXIS.QAData.financial_mean import financial_dict
+import traceback
 
 """
 按要求从数据库取数据，并转换成numpy结构
@@ -62,7 +63,6 @@ def QA_fetch_stock_day(code, start, end, format='numpy', frequence='day', collec
 
     # code checking
     code = QA_util_code_tolist(code)
-
     if QA_util_date_valid(end):
 
         __data = []
@@ -78,17 +78,20 @@ def QA_fetch_stock_day(code, start, end, format='numpy', frequence='day', collec
                 res.date)).drop_duplicates((['date', 'code'])).query('volume>1').set_index('date', drop=False)
             res = res.ix[:, ['code', 'open', 'high', 'low',
                              'close', 'volume', 'amount', 'date']]
-        except:
+        except Exception as e:
+            exstr = traceback.format_exc()
+            print(exstr)
             res = None
-        if format in ['P', 'p', 'pandas', 'pd']:
-            return res
-        elif format in ['json', 'dict']:
-            return QA_util_to_json_from_pandas(res)
-        # 多种数据格式
-        elif format in ['n', 'N', 'numpy']:
-            return numpy.asarray(res)
-        elif format in ['list', 'l', 'L']:
-            return numpy.asarray(res).tolist()
+        if not res is None:
+            if format in ['P', 'p', 'pandas', 'pd']:
+                return res
+            elif format in ['json', 'dict']:
+                return QA_util_to_json_from_pandas(res)
+            # 多种数据格式
+            elif format in ['n', 'N', 'numpy']:
+                return numpy.asarray(res)
+            elif format in ['list', 'l', 'L']:
+                return numpy.asarray(res).tolist()
         else:
             print("QA Error QA_fetch_stock_day format parameter %s is none of  \"P, p, pandas, pd , json, dict , n, N, numpy, list, l, L, !\" " % format)
             return None

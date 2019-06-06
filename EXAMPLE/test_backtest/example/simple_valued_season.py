@@ -158,7 +158,6 @@ if __name__ == '__main__':
     print(AC.history_table)
 
 
-
     # 分析
     risk = QA.QA_Risk(account=AC, benchmark_code=benchmark_code, benchmark_type=QA.MARKET_TYPE.INDEX_CN, if_fq=False)
     risk.save()
