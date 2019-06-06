@@ -28,6 +28,7 @@ import pandas as pd
 
 from QUANTAXIS.QAUtil import QA_util_log_info, QA_util_random_with_topic
 from QUANTAXIS.QAUtil.QAParameter import MARKET_TYPE, TRADE_STATUS
+import traceback
 """撮合类
 
 一个无状态的 Serverless Dealer
@@ -112,7 +113,7 @@ class QA_Dealer():
         # if order.market_type == MARKET_TYPE.STOCK_CN:
 
         res = self.backtest_dealer()
-        # print(res)
+        print("deal order="+str(res))
         self.deal_message[self.order.order_id] = res
 
         # elif order.market_type == MARKET_TYPE.FUTURE_CN:
@@ -270,6 +271,8 @@ class QA_Dealer():
             return self.callback_message
 
         except Exception as e:
+            exstr = traceback.format_exc()
+            print(exstr)
             QA_util_log_info('MARKET ENGINE ERROR: {}'.format(e))
             self.status = TRADE_STATUS.NO_MARKET_DATA
             return self.callback_message

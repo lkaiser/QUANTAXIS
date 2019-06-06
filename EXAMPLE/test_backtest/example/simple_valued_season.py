@@ -4,6 +4,8 @@ import QUANTAXIS as QA
 from QUANTAXIS.QAFetch import QATusharePro as pro
 from indicator.simple_valued import simpleValued
 from QUANTAXIS.QAData import QA_DataStruct_Stock_day
+from QUANTAXIS.QAFetch.QAQuery import QA_fetch_stock_day
+
 import pandas as pd
 
 try:
@@ -53,48 +55,59 @@ def simple_backtest(AC:QA.QA_Account, code, start:str, end:str):
             sells = set(sell_candidates.ts_code).intersection([] if AC.hold_table().empty else set(AC.hold_table().index)).union(elimits)
             for code in sells:
                 cur_account_sotck_code_sell_available_amount = AC.sell_available.get(code, 0)
-                if(cur_account_sotck_code_sell_available_amount >0):
+                if (cur_account_sotck_code_sell_available_amount > 0):
                     time = peroid_item.trade_date[0]
                     time = time[0:4] + '-' + time[4:6] + '-' + time[6:8]
-                    print(cur_account_sotck_code_sell_available_amount)
-                    order = AC.send_order(
-                        code=code, time=time, towards=QA.ORDER_DIRECTION.SELL,
-                        order_model=QA.ORDER_MODEL.CLOSE, amount_model=QA.AMOUNT_MODEL.BY_AMOUNT,
-                        amount=cur_account_sotck_code_sell_available_amount, price=0,
-                    )
-                    print("#########here"+str(order))
-                    Broker.receive_order(QA.QA_Event(order=order))
-                    trade_mes = Broker.query_orders(AC.account_cookie, 'filled')
-                    res = trade_mes.loc[order.account_cookie, order.realorder_id]
-                    order.trade(res.trade_id, res.trade_price,
-                                res.trade_amount, res.trade_time)
+                    mk = QA_fetch_stock_day(code=code,
+                                             start=time,
+                                             end=time,
+                                             format='json')
+                    if not mk is None:
+                        print(cur_account_sotck_code_sell_available_amount)
+                        order = AC.send_order(
+                            code=code, time=time, towards=QA.ORDER_DIRECTION.SELL,
+                            order_model=QA.ORDER_MODEL.CLOSE, amount_model=QA.AMOUNT_MODEL.BY_AMOUNT,
+                            amount=cur_account_sotck_code_sell_available_amount, price=0,
+                        )
+                        print("#########here"+str(order))
+                        Broker.receive_order(QA.QA_Event(order=order))
+                        trade_mes = Broker.query_orders(AC.account_cookie, 'filled')
+                        #print(trade_mes)
+                        res = trade_mes.loc[order.account_cookie, order.realorder_id]
+                        order.trade(res.trade_id, res.trade_price,
+                                    res.trade_amount, res.trade_time)
         cash = AC.cash_available
         if cash and not buy_candidates.empty:
             buys = buy_candidates[0:5] if len(buy_candidates)>5  else buy_candidates
             #print(buys)
             for code in buys.ts_code:
-                #print("code="+code)
-                avgPrice = peroid_item[peroid_item.ts_code==code].close[0]
-                maxMoney = cash/len(buys)
                 time = peroid_item.trade_date[0]
-                time = time[0:4]+'-'+time[4:6]+'-'+time[6:8]
-                if maxMoney>0:
-                    print('maxMoney='+str(maxMoney))
-                    order = AC.send_order(
-                        code=code, time=time, towards=QA.ORDER_DIRECTION.BUY,
-                        order_model=QA.ORDER_MODEL.CLOSE,
-                        amount_model=QA.AMOUNT_MODEL.BY_MONEY,
-                        money=maxMoney,
-                        price=avgPrice,
-                    )
-                    #print(order)
-                    if order is not None and order:
-                        sd = peroid_item[peroid_item.ts_code==code].loc[:,['open','close','high','low','vol']]
-                        Broker.receive_order(QA.QA_Event(order=order,market_data=QA_DataStruct_Stock_day(sd)))
-                        trade_mes = Broker.query_orders(AC.account_cookie, 'filled')
-                        res = trade_mes.loc[order.account_cookie, order.realorder_id]
-                        order.trade(res.trade_id, res.trade_price,
-                                    res.trade_amount, res.trade_time)
+                time = time[0:4] + '-' + time[4:6] + '-' + time[6:8]
+                mk = QA_fetch_stock_day(code=code,
+                                        start=time,
+                                        end=time,
+                                        format='json')
+                if not mk is None:
+                #print("code="+code)
+                    avgPrice = peroid_item[peroid_item.ts_code==code].close[0]
+                    maxMoney = cash/len(buys)
+                    if maxMoney>0:
+                        print('maxMoney='+str(maxMoney))
+                        order = AC.send_order(
+                            code=code, time=time, towards=QA.ORDER_DIRECTION.BUY,
+                            order_model=QA.ORDER_MODEL.CLOSE,
+                            amount_model=QA.AMOUNT_MODEL.BY_MONEY,
+                            money=maxMoney,
+                            price=avgPrice,
+                        )
+                        #print(order)
+                        if order is not None and order:
+                            sd = peroid_item[peroid_item.ts_code==code].loc[:,['open','close','high','low','vol']]
+                            Broker.receive_order(QA.QA_Event(order=order,market_data=QA_DataStruct_Stock_day(sd)))
+                            trade_mes = Broker.query_orders(AC.account_cookie, 'filled')
+                            res = trade_mes.loc[order.account_cookie, order.realorder_id]
+                            order.trade(res.trade_id, res.trade_price,
+                                        res.trade_amount, res.trade_time)
         AC.settle()
 
 if __name__ == '__main__':
