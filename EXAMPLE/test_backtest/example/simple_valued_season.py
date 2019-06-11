@@ -37,10 +37,10 @@ class simpleValuedSeason:
         #
         #DATA = pro.QA_SU_save_stock_daily(code, start, end)
         # todo 计算信号
-        #sv = simpleValued(start,end)
-        #sv.indcators_prepare()
-        #stock_signal = sv.non_finacal_top5_valued()
-        #stock_signal.to_pickle('test.pkl')
+        # sv = simpleValued(start,end)
+        # sv.indcators_prepare()
+        # stock_signal = sv.non_finacal_top5_valued()
+        # stock_signal.to_pickle('test.pkl')
         stock_signal = pd.read_pickle('test.pkl')
         #print(stock_signal.head())
         stock_signal.loc[:,'open'] = stock_signal.loc[:,'high'] = stock_signal.loc[:,'low'] = stock_signal['close']
@@ -52,28 +52,29 @@ class simpleValuedSeason:
             peroid_item = stock_signal.xs(item,
                     level=0,
                     drop_level=False)
+            peroid_item.loc[:,['ts_code']] = peroid_item.ts_code.str[0:6]
             # 可卖数量
-            buy_candidates = peroid_item[peroid_item.buy>0]
-            sell_candidates = peroid_item[peroid_item.sell>0]
+            buy_candidates = peroid_item[(peroid_item.roe_buy>0) & (peroid_item.half_roe_buy>peroid_item.roe_buy)]#选取roe增速上移的
+            sell_candidates = peroid_item[(peroid_item.roe_sell>0)]
             elimits = []
             if not AC.hold_table().empty:
                 #print(type(peroid_item.ts_code))
-                elimits = set(AC.hold_table().index).difference(peroid_item.ts_code.values)#mutiple index  index0 为日期 index1 为ts_code基本面发生变化，直接清空
+                elimits = set(AC.hold_table().index).difference(peroid_item.ts_code.str[0:6].values)#mutiple index  index0 为日期 index1 为ts_code基本面发生变化，直接清空
             if not sell_candidates.empty or not elimits.empty:
-                sells = set(sell_candidates.ts_code).intersection([] if AC.hold_table().empty else set(AC.hold_table().index)).union(elimits)
+                sells = set(sell_candidates.ts_code.str[0:6]).intersection([] if AC.hold_table().empty else set(AC.hold_table().index)).union(elimits)
                 for code in sells:
-                    cur_account_sotck_code_sell_available_amount = AC.sell_available.get(code, 0)
+                    cur_account_sotck_code_sell_available_amount = AC.sell_available.get(code[0:6], 0)
                     if (cur_account_sotck_code_sell_available_amount > 0):
                         time = peroid_item.trade_date[0]
                         time = time[0:4] + '-' + time[4:6] + '-' + time[6:8]
-                        mk = QA_fetch_stock_day(code=code,
+                        mk = QA_fetch_stock_day(code=code[0:6],
                                                  start=time,
                                                  end=time,
                                                  format='json')
                         if not mk is None:
                             #print(cur_account_sotck_code_sell_available_amount)
                             order = AC.send_order(
-                                code=code, time=time, towards=QA.ORDER_DIRECTION.SELL,
+                                code=code[0:6], time=time, towards=QA.ORDER_DIRECTION.SELL,
                                 order_model=QA.ORDER_MODEL.CLOSE, amount_model=QA.AMOUNT_MODEL.BY_AMOUNT,
                                 amount=cur_account_sotck_code_sell_available_amount, price=0,
                             )
@@ -93,7 +94,7 @@ class simpleValuedSeason:
                 for code in buys.ts_code:
                     time = peroid_item.trade_date[0]
                     time = time[0:4] + '-' + time[4:6] + '-' + time[6:8]
-                    mk = QA_fetch_stock_day(code=code,
+                    mk = QA_fetch_stock_day(code=code[0:6],
                                             start=time,
                                             end=time,
                                             format='json')
@@ -104,7 +105,7 @@ class simpleValuedSeason:
                         if maxMoney>100000:
                             print('maxMoney='+str(maxMoney))
                             order = AC.send_order(
-                                code=code, time=time, towards=QA.ORDER_DIRECTION.BUY,
+                                code=code[0:6], time=time, towards=QA.ORDER_DIRECTION.BUY,
                                 order_model=QA.ORDER_MODEL.CLOSE,
                                 amount_model=QA.AMOUNT_MODEL.BY_MONEY,
                                 money=maxMoney,
@@ -140,7 +141,7 @@ class simpleValuedSeason:
         # backtest_code_list = QA.QA_fetch_stock_block_adv().code[0:10]
         backtest_code_list = '000001'
         backtest_start_date = '20180101'
-        backtest_end_date = '20180421'
+        backtest_end_date = '20181021'
 
         #Broker = QA.QA_BacktestBroker()
         AC = QA.QA_Account(
@@ -166,14 +167,14 @@ class simpleValuedSeason:
 
         # 结果
         # print(AC.message)
-        print(AC.history_table)
+        print(AC.history_table.loc[:,['datetime','code','price','amount','tax']])
         self.ac = AC;
 
         # 分析
         # print(AC.end_date)
         #AC = QA.QA_Account().from_message(QA.QA_fetch_account({'account_cookie': 'bba'})[0])
         risk = QA.QA_Risk(account=AC, benchmark_code=benchmark_code, benchmark_type=QA.MARKET_TYPE.INDEX_CN, if_fq=False)
-        self.rs = AC;
+        self.rs = risk;
 
         # risk.save()
         # risk.account
@@ -195,7 +196,7 @@ if __name__ == '__main__':
     # 组合cookie
     portfolio_cookie = 'win300'
     # 账户cookie
-    account_cookie = 'bba'
+    account_cookie = 'roe'
     benchmark_code = '000300'
     initial_cash = 200000
     initial_hold = {}
@@ -207,7 +208,7 @@ if __name__ == '__main__':
     # backtest_code_list = QA.QA_fetch_stock_block_adv().code[0:10]
     backtest_code_list = '000001'
     backtest_start_date = '20180101'
-    backtest_end_date = '20180421'
+    backtest_end_date = '20181021'
 
     Broker = QA.QA_BacktestBroker()
     AC = QA.QA_Account(
@@ -229,21 +230,21 @@ if __name__ == '__main__':
     svs = simpleValuedSeason()
     svs.simple_backtest(AC, backtest_code_list, backtest_start_date, backtest_end_date)
 
-    #AC.save()
+    AC.save()
 
     # 结果
     #print(AC.message)
-    print(AC.history_table)
+    print(AC.history_table.loc[:, ['datetime', 'code', 'price', 'amount', 'tax']])
 
 
     # 分析
     #print(AC.end_date)
-    AC = QA.QA_Account().from_message(QA.QA_fetch_account({'account_cookie': 'bba'})[0])
+    #AC = QA.QA_Account().from_message(QA.QA_fetch_account({'account_cookie': 'bba'})[0])
     risk = QA.QA_Risk(account=AC, benchmark_code=benchmark_code, benchmark_type=QA.MARKET_TYPE.INDEX_CN, if_fq=False)
 
     #risk.save()
     #risk.account
-
+    #s.rs.market_value.loc['2018-02-02'].apply(lambda x: x.sum(), axis=1) 列汇总
     #print(risk.message)
     fig=risk.plot_assets_curve()
 

@@ -205,10 +205,18 @@ class simpleValued:
                     dailymarket = dailymarket[dailymarket.statype == 'non_finacial']
                     df.loc[:, 'buy'] = df.equity2_pb7 / df.pb - dailymarket[dailymarket.category == 'equity2_pb7_pb'].per95[0]
                     df.loc[:, 'sell'] = dailymarket[dailymarket.category == 'equity2_pb7_pb'].per95[0] - df.equity2_pb7 / df.pb - 0.3
+                    df.loc[:, 'roe_buy'] = df.roe_year_pb7 / df.pb - dailymarket[dailymarket.category == 'roe_year_pb7_pb'].per95[0]
+                    df.loc[:, 'roe_sell'] = dailymarket[dailymarket.category == 'roe_year_pb7_pb'].per95[0] - df.roe_year_pb7 / df.pb - 0.3
+                    df.loc[:, 'half_roe_buy'] = df.roe_half_year_pb7 / df.pb - dailymarket[dailymarket.category == 'roe_half_year_pb7_pb'].per95[0]
+                    df.loc[:, 'half_roe_sell'] = dailymarket[dailymarket.category == 'roe_half_year_pb7_pb'].per95[0] - df.roe_half_year_pb7 / df.pb - 0.3
                     return df
 
         return basic.groupby('trade_date',as_index=False).apply(_top5).set_index(['trade_date', 'ts_code'],drop=False)
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
+
+
+    def industry_trend(self):
+        pass
 
     def price_trend(self,df):
 
