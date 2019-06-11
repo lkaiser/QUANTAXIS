@@ -29,7 +29,9 @@ def simple_backtest(AC:QA.QA_Account, code, start:str, end:str):
     :return:
     '''
     # 取数并前复权
-    DATA = QA.QA_fetch_stock_day_adv(code, start, end).to_qfq()
+    DATA = QA.QA_fetch_stock_day_adv(code, start, end)
+    print(DATA)
+    DATA.to_qfq()
     # todo 计算信号
     stock_signal = DATA.add_func(MACD_JCSC, 12, 26, 9)
 
@@ -134,7 +136,7 @@ if __name__ == '__main__':
     # backtest_code_list = QA.QA_fetch_stock_block_adv().code[0:10]
     backtest_code_list = '000001'
     backtest_start_date = '2018-01-01'
-    backtest_end_date = '2018-08-25'
+    backtest_end_date = '2018-08-21'
 
     Broker = QA.QA_BacktestBroker()
     AC = QA.QA_Account(

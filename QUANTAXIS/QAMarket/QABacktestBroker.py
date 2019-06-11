@@ -23,6 +23,7 @@
 # SOFTWARE.
 
 import datetime
+import traceback
 
 import numpy as np
 import pandas as pd
@@ -256,7 +257,7 @@ class QA_BacktestBroker(QA_Broker):
                 data = self.market_data[0]
 
             else:
-                print(type(self.market_data))
+                #print(type(self.market_data))
                 self.market_data = self.market_data.to_json()[0]
         else:
             self.market_data = self.get_market(order)
@@ -460,5 +461,7 @@ class QA_BacktestBroker(QA_Broker):
                     data['vol'] = data['volume']
                 return data
             except Exception as e:
+                exstr = traceback.format_exc()
+                print(exstr)
                 QA_util_log_info('MARKET_ENGING ERROR: {}'.format(e))
                 return None
