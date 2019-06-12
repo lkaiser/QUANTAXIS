@@ -15,7 +15,7 @@ class simpleValued:
         self.basic_temp_name = 'basic_temp_' +start+'_'+end +'.pkl'
         start_2years_bf = str(int(start[0:4]) - 3)
         self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
-        #print(self.finacial.head())
+        self.income = pro.QA_fetch_get_income(start=start_2years_bf, end=end)
         self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
         if (os.path.isfile(self.basic_temp_name)):
             self.basic = pd.read_pickle(self.basic_temp_name)
@@ -25,6 +25,7 @@ class simpleValued:
             self.basic = basic.sort_values(['ts_code','trade_date'], ascending = True)
         self.stock = pro.QA_SU_stock_info()
         self.dailymarket = None
+        self.industry = None
 
 
     def indcators_prepare(self):
@@ -137,10 +138,11 @@ class simpleValued:
             #return pd.concat(rs)
             return st
         #print(self.basic.loc[:,['equity_pb6','equity_pb7','roe_year_pb6','roe_year_pb7']].head())
+        #pass
         self.dailymarket = self.basic.groupby('trade_date').apply(_dailystat)
 
 
-    def non_finacal_top5_valued(self):
+    def non_finacal_top5_valued(self,data):
         """
         简单价值判断，近1年 roe,近半年roe，近3年净资产增速，近2年净资产增速。价值法6年pb、7年pb
         """
@@ -151,6 +153,7 @@ class simpleValued:
         # td
         non_finacial_codes = self.stock[(self.stock.industry != '银行') & (self.stock.industry != '保险')].ts_code.values
         basic = self.basic[self.basic.ts_code.isin(non_finacial_codes)]
+
 
         def _trash_fiter(df):
             '''垃圾排除大法 剔除商誉过高、现金流不充裕，主营利润占比低、资产负债率过高、存货占比、应收占比'''
@@ -215,8 +218,24 @@ class simpleValued:
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
 
 
-    def industry_trend(self):
-        pass
+    def industry_trend(self,data):
+        self.industry = QA.QA_fetch_stock_block_adv()
+        finace = pd.merge(self.income, self.asset, left_on='code', right_on='code', how="inner")
+        stock = pd.merge(data,finace,left_on='code', right_on='code', how="left")
+        #
+        def _trend(data):
+            '''
+            行业趋势 计算总市值,流通市值,总扣非盈利,总净资产,总资产,总成交量,
+            :param data:
+            :return:
+            '''
+
+            pass
+
+
+
+
+
 
     def price_trend(self,df):
 
