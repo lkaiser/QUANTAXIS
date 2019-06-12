@@ -1199,6 +1199,13 @@ adj_factor	float	复权因子
         print(" Save data to stock_daily_adj_tushare collection， OK")
 
 
+def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=False):
+    stock_daily = client.stock_daily_basic_tushare
+    ref = stock_daily.find({'ts_code': df.iloc[i_].ts_code}).sort([('trade_date', -1)]).limit(1)
+    times = pd.date_range(start='20010101', end='20191231', freq='AS-JAN')
+    for i_ in range(len(times)):
+        stock_daily.find({'date': df.iloc[i_].ts_code})
+
 
 if __name__ == '__main__':
     #QA_SU_save_stock_daily_basic()
@@ -1207,11 +1214,11 @@ if __name__ == '__main__':
     #print(pd.date_range('20190101',periods=2, freq='1d').strftime('%Y%m%d').values[-1])
     #DATABASE.stock_daily_basic_tushare.remove()
 
-    QA_SU_save_stock_daily_basic(start_day='20010101')
-    QA_SU_save_stock_report_fina_indicator(start_day='20010101')
-    QA_SU_save_stock_report_assetliability(start_day='20010101')
-    QA_SU_save_stock_report_income(start_day='20010101')
-    QA_SU_save_stock_report_cashflow(start_day='20010101')
+    # QA_SU_save_stock_daily_basic(start_day='20010101')
+    # QA_SU_save_stock_report_fina_indicator(start_day='20010101')
+    # QA_SU_save_stock_report_assetliability(start_day='20010101')
+    # QA_SU_save_stock_report_income(start_day='20010101')
+    # QA_SU_save_stock_report_cashflow(start_day='20010101')
 
     result = []
     # def when_done(r):
@@ -1227,7 +1234,7 @@ if __name__ == '__main__':
     #     future_result3 = pool.submit(QA_SU_save_stock_report_cashflow)
     #     future_result3.add_done_callback(lambda: print('QA_SU_save_stock_report_cashflow finished'))
 
-
+    print(pd.date_range(start='20010101', end='20191231', freq='AS-JAN'))
     print('#####################all done##########################')
 
 
