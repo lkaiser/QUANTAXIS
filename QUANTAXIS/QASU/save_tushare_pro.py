@@ -28,6 +28,7 @@ import json
 import re
 import time
 import pandas as pd
+import numpy as np
 from QUANTAXIS.QAUtil.QADate import QA_util_today_str
 from concurrent.futures import ThreadPoolExecutor
 
@@ -45,6 +46,7 @@ from QUANTAXIS.QAUtil.QASetting import DATABASE
 
 import tushare as ts
 ts.set_token('0f7da64f6c87dfa58456e0ad4c7ccf31d6c6e89458dc5b575e028c64')
+#uri = mongodb://127.0.0.1:27017
 
 def QA_SU_save_stock_terminated(client=DATABASE):
     '''
@@ -132,7 +134,7 @@ def QA_SU_save_stock_daily_basic(start_day='20010101',client=DATABASE,force=Fals
     #days = pd.date_range(start_day, today, freq='1d').strftime('%Y-%m-%d').values
     stock_daily = client.stock_daily_basic_tushare
     print("##################get daily indicators start####################")
-    for i_ in range(3017,len(df.index)):
+    for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         start_date = start_day
         ref = stock_daily.find({'ts_code': df.iloc[i_].ts_code}).sort([('trade_date',-1)]).limit(1)
@@ -279,7 +281,7 @@ distable_profit	float	可分配利润
             report_income.insert_many(json_data)
         print(" Save data to stock_report_income_tushare collection， OK")
 
-def QA_SU_save_stock_report_assetliability(start_day='20010101',client=DATABASE,force=False):
+def QA_SU_save_stock_report_assetliability(start_day='20010101',client=DATABASE,force=False,codes=None):
     '''
     资产负债表数据
 输出参数
@@ -446,6 +448,8 @@ hfs_sales	float	持有待售的负债
         '''
     pro = ts.pro_api()
     df = pro.stock_basic()
+    if codes and codes.size:
+        df = df[df.ts_code.isin(codes)]
     if df.empty:
         print("there is no stock info,stock count is %d" % len(df))
         return
@@ -599,13 +603,13 @@ im_n_incr_cash_equ	float	现金及现金等价物净增加额(间接法)
         return
     report_income = client.stock_report_cashflow_tushare
     print("##################get asset cashflow reports start####################")
-    for i_ in range(len(df.index)):
+    for i_ in range(0,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
         print('UPDATE stock cashflow Trying updating %s' % (df.iloc[i_].ts_code))
-        time.sleep(1)
+        time.sleep(.7)
         try:
             income = pro.cashflow(ts_code=df.iloc[i_].ts_code)
         except Exception as e:
@@ -949,7 +953,8 @@ q_saleexp_to_gr	float	销售费用／营业总收入 (单季度)
 #q_impair_to_gr_ttm	float	资产减值损失／营业总收入(单季度)
 q_gc_to_gr	float	营业总成本／营业总收入 (单季度)
 #q_op_to_gr	float	营业利润／营业总收入(单季度)
-q_roe	float	净资产收益率(单季度)
+q_roe	float	净资产收益率(
+单季度)
 q_dt_roe	float	净资产单季度收益率(扣除非经常损益)
 q_npta	float	总资产净利润(单季度)
 #q_opincome_to_ebt	float	经营活动净收益／利润总额(单季度)
@@ -998,19 +1003,20 @@ equity_yoy	float	净资产同比增长率
         return
     report_income = client.stock_report_finindicator_tushare
     print("##################get fina_indicator reports start####################")
-    for i_ in range(600,len(df.index)):
+    fields = 'ts_code,ann_date,end_date,eps,dt_eps,total_revenue_ps,revenue_ps,capital_rese_ps,surplus_rese_ps,undist_profit_ps,extra_item,profit_dedt,gross_margin,current_ratio,quick_ratio,cash_ratio,invturn_days,arturn_days,inv_turn,ar_turn,ca_turn,fa_turn,assets_turn,op_income,valuechange_income,interst_income,daa,ebit,ebitda,fcff,fcfe,current_exint,noncurrent_exint,interestdebt,netdebt,tangible_asset,working_capital,networking_capital,invest_capital,retained_earnings,diluted2_eps,bps,ocfps,retainedps,cfps,ebit_ps,fcff_ps,fcfe_ps,netprofit_margin,grossprofit_margin,cogs_of_sales,expense_of_sales,profit_to_gr,saleexp_to_gr,adminexp_of_gr,finaexp_of_gr,impai_ttm,gc_of_gr,op_of_gr,ebit_of_gr,roe,roe_waa,roe_dt,roa,npta,roic,roe_yearly,roa2_yearly,roe_avg,opincome_of_ebt,investincome_of_ebt,n_op_profit_of_ebt,tax_to_ebt,dtprofit_to_profit,salescash_to_or,ocf_to_or,ocf_to_opincome,capitalized_to_da,debt_to_assets,assets_to_eqt,dp_assets_to_eqt,ca_to_assets,nca_to_assets,tbassets_to_totalassets,int_to_talcap,eqt_to_talcapital,currentdebt_to_debt,longdeb_to_debt,ocf_to_shortdebt,debt_to_eqt,eqt_to_debt,eqt_to_interestdebt,tangibleasset_to_debt,tangasset_to_intdebt,tangibleasset_to_netdebt,ocf_to_debt,ocf_to_interestdebt,ocf_to_netdebt,ebit_to_interest,longdebt_to_workingcapital,ebitda_to_debt,turn_days,roa_yearly,roa_dp,fixed_assets,profit_prefin_exp,non_op_profit,op_to_ebt,nop_to_ebt,ocf_to_profit,cash_to_liqdebt,cash_to_liqdebt_withinterest,op_to_liqdebt,op_to_debt,roic_yearly,profit_to_op,q_opincome,q_investincome,q_dtprofit,q_eps,q_netprofit_margin,q_gsprofit_margin,q_exp_to_sales,q_profit_to_gr,q_saleexp_to_gr,q_adminexp_to_gr,q_finaexp_to_gr,q_impair_to_gr_ttm,q_gc_to_gr,q_op_to_gr,q_roe,q_dt_roe,q_npta,q_opincome_to_ebt,q_investincome_to_ebt,q_dtprofit_to_profit,q_salescash_to_or,q_ocf_to_sales,q_ocf_to_or,basic_eps_yoy,dt_eps_yoy,cfps_yoy,op_yoy,ebt_yoy,netprofit_yoy,dt_netprofit_yoy,ocf_yoy,roe_yoy,bps_yoy,assets_yoy,eqt_yoy,tr_yoy,or_yoy,q_gr_yoy,q_gr_qoq,q_sales_yoy,q_sales_qoq,q_op_yoy,q_op_qoq,q_profit_yoy,q_profit_qoq,q_netprofit_yoy,q_netprofit_qoq,equity_yoy,rd_exp	'
+    for i_ in range(0,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
         print('UPDATE stock fina_indicator Trying updating %s' % (df.iloc[i_].ts_code))
-        time.sleep(1)
+        time.sleep(.7)
         try:
-            income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code)
+            income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code,fields=fields)
         except Exception as e:
             print(e)
             time.sleep(30)
-            income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code)
+            income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code,fields=fields)
         finally:
             pass
         print(" Get stock fina_indicator reports from tushare,reports count is %d" % len(income))
@@ -1225,7 +1231,77 @@ adj_factor	float	复权因子
             report_income.insert_many(json_data)
         print(" Save data to stock_daily_adj_tushare collection， OK")
 
+def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=False):
+    years = pd.date_range(start=start_day,end=datetime.strftime(pd.datetime.today(), '%y%M%d'), freq='A-JAN')
+    pro = ts.pro_api()
+    basic = pro.stock_basic()
+    def _indicatorCp(data,fin,ast,cash):
+        dt = data.groupby('code').head(1) #取最小日期数据
+        div = dt.total_mv.describe(percentiles=[.90])[5] #统计 total_mv
+        head = dt[dt.total_mv<=div].nlargest(10,'total_mv').code.values
+        data2 = data[data.code.isin(head)]
 
+        def _season(data,fin):
+            for inx,item in enumerate(fin):
+                if inx:
+                    data[(data.trade_date>=fin[inx-1].ann_date) &(data.trade_date<fin[inx].ann_date)].loc[:,'season'] = fin[inx-1].end_date
+                if inx == fin.shape[0]-1:
+                    data[(data.trade_date >= fin[inx].ann_date)].loc[:,'season'] = fin[inx].end_date
+        data2.loc[:'sma5_deal_mv'] = data2.turnover_rate_f*data2.close
+        data2.fillna(method='bfill',inplace=True).fillna(method='ffill',inplace=True)
+        data2 = data2.groupby('code',as_index=False).apply(_season,fin=fin)
+        data2 = pd.merge(data2, fin, left_on=['code', 'season'], right_on=['code', 'end_date'], how="left")
+        if ast:
+            data2 = pd.merge(data2, ast, left_on=['code','season'], right_on=['code','end_date'], how="left")
+        if cash:
+            data2 = pd.merge(data2, cash, left_on=['code','season'], right_on=['code','end_date'], how="left")
+
+        def _dayav(data):
+            data.loc[:,'deal_mv_rate'] = data2.sma5_deal_mv/data2.sma5_deal_mv
+            return data,pd.dataFrame(data=[data.name],columns=['trade_day'])
+        data2,days = data2.groupby('trade_date',as_index=False).apply(_dayav)
+        data2 = pd.merge(data2, days, left_on='trade_date', right_on='trade_day', how="outer")
+
+        def _amountfil(data):
+            pass
+        data2.groupby('trade_date',as_index=False)
+        #data2.deal_mv_rate.fillna(method='bfill', inplace=True).fillna(method='ffill', inplace=True)
+
+
+        data2.fillna(method='bfill', inplace=True).fillna(method='ffill', inplace=True)
+
+
+
+
+        return data2.sum()
+
+
+        # for i in range(0, fin.shape[0]):
+        #     if i + 1 < fin.shape[0]:
+        #         query = (data.trade_date >= fin.iloc[i].ann_date) & (data.trade_date < fin.iloc[i + 1].ann_date)
+        #         data.loc[query, ['total_hldr_eqy_exc_min_int']] = fin.iloc[i].total_hldr_eqy_exc_min_int #股东权益(不含少数)
+        #         data.loc[query, ['total_hldr_eqy_inc_min_int']] = fin.iloc[i].total_hldr_eqy_inc_min_int  # 股东权益(含少数)
+        #         data.loc[query, ['total_liab_hldr_eqy']] = fin.iloc[i].total_liab_hldr_eqy  # 总资产
+        #         data.loc[query, ['acc_receivable']] = fin.iloc[i].acc_receivable  # 应收款
+
+
+    for i_ in range(len(years)):
+        end = datetime.strftime(pd.datetime.today(), '%y%M%d')
+        if i_+1<len(years):
+            end = years[i_+1]
+        start_2years_bf = str(int(years[i_][0:4]) - 2)+'0101'
+        cur_basic = basic[(basic.list_date < start_2years_bf) &(basic.list_status=='D')]
+        query = {"trade_date": {
+            "$lt": end,
+            "$gte": years[i_]}}
+        cursor = client.stock_daily_basic_tushare.find(query, {"_id": 0}, batch_size=10000)
+        daily = pd.DataFrame([item for item in cursor])
+        daily = pd.merge(cur_basic, daily, left_on='code', right_on='code', how="left")
+        daily.groupby('industry').apply(_indicatorCp)
+
+
+
+    pass
 
 if __name__ == '__main__':
     #QA_SU_save_stock_daily_basic()
@@ -1234,7 +1310,7 @@ if __name__ == '__main__':
     #print(pd.date_range('20190101',periods=2, freq='1d').strftime('%Y%m%d').values[-1])
     #DATABASE.stock_daily_basic_tushare.remove()
     #QA_SU_save_stock_report_fina_indicator(start_day='20010101')
-    #QA_SU_save_stock_report_assetliability(start_day='20010101')
+    # QA_SU_save_stock_report_assetliability(start_day='20010101')
     # QA_SU_save_stock_report_income(start_day='20010101')
     # QA_SU_save_stock_report_cashflow(start_day='20010101')
 
@@ -1254,8 +1330,17 @@ if __name__ == '__main__':
     #     future_result3 = pool.submit(QA_SU_save_stock_report_cashflow)
     #     future_result3.add_done_callback(lambda: print('QA_SU_save_stock_report_cashflow finished'))
 
-
-    print('#####################all done##########################')
+    #pro = ts.pro_api()
+    #print(pro.fina_indicator(ts_code='002859.SZ')
+    # s = pd.Series([2,3,4,5,100])
+    # print(s.describe(percentiles=[.90])[5])
+    # print('#####################all done##########################')
 
 
     #print('2019-05-22'>'2019-08-01')
+    data = pd.DataFrame(np.arange(3, 19, 1).reshape(4, 4), index=list('abcd'))
+    print(data)
+    data.iloc[0:2, 0:3] = np.nan
+
+    print(data)
+    print(data.fillna(method='ffill',axis=1).fillna(method='bfill',axis=1))
