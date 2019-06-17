@@ -1243,8 +1243,8 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
             first = first[first.total_mv < uplimit].nlargest(10, 'total_mv')  # 取市值前10
             index_json = {"name": data.name, "time": time, " compose": first.ts_code.values.tolist(), "init_time": first.trade_date.values.tolist(), "total": len(first), "scare": first.total_mv.sum()}
             #json_data = QA_util_to_json_from_pandas(index_json)
-            print(json.dumps(index_json))
-            in_index.insert_many(json.dumps(index_json))  # 保存每期指数构成成分，半年更新一次指数构成
+            #print(json.dumps(index_json))
+            in_index.insert_one(index_json)  # 保存每期指数构成成分，半年更新一次指数构成
             first.loc[:, 'total_mv_rate'] = first.total_mv / (first.total_mv.sum())
             first.loc[:, 'deal_mv_rate'] = first.turnover_rate_f * first.close / ((first.turnover_rate_f * first.close).sum())  # TODO 考虑改进一下，用sma5来计算
             df = df[df.ts_code.isin(first.ts_code.values)]  # 取总市值前十的股票构成该行业指数
@@ -1293,11 +1293,11 @@ if __name__ == '__main__':
     #print(pd.date_range('20190101',periods=2, freq='1d').strftime('%Y%m%d').values[-1])
     #DATABASE.stock_daily_basic_tushare.remove()
 
-    # QA_SU_save_stock_daily_basic(start_day='20010101')
-    # QA_SU_save_stock_report_fina_indicator(start_day='20010101')
-    # QA_SU_save_stock_report_assetliability(start_day='20010101')
-    # QA_SU_save_stock_report_income(start_day='20010101')
-    # QA_SU_save_stock_report_cashflow(start_day='20010101')
+    #QA_SU_save_stock_daily_basic(start_day='20010101')
+    QA_SU_save_stock_report_fina_indicator(start_day='20010101')
+    QA_SU_save_stock_report_assetliability(start_day='20010101')
+    QA_SU_save_stock_report_income(start_day='20010101')
+    QA_SU_save_stock_report_cashflow(start_day='20010101')
 
     result = []
     # def when_done(r):
@@ -1319,15 +1319,15 @@ if __name__ == '__main__':
     # print(type(datetime.datetime.now()))
     # print(type(time.localtime()))
     #QA_SU_save_industry_indicator(start_day='20040101')
-    dict1 = {"age": "12","bb":"gg"}
-    json_info = json.dumps(dict1)
-    in_index = DATABASE.index_compose  # 指数组成信息
-    in_index.insert_many(json.dumps(json_info))
+    # dict1 = {"age": "12","bb":"gg"}
+    # json_info = json.dumps(dict1)
+    # in_index = DATABASE.index_compose  # 指数组成信息
+    # in_index.insert_one(dict1)
     #print(json_info)
     # print(a[0].strftime('%Y%m%d'))
     # print((a[0] - pd.Timedelta(180, unit='D')).strftime('%Y%m%d'))#.strftime('%Y%m%d')
     #
-    # print('#####################all done##########################')
+    print('#####################all done##########################')
     # a = np.array([1, 2, 3])
     # b = array.array('i',a)
     # c = [1,2,3]
