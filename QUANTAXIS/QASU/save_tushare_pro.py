@@ -139,7 +139,7 @@ def QA_SU_save_stock_daily_basic(start_day='20010101',client=DATABASE,force=Fals
         print(" Save data to stock_daily_basic_tushare collection， OK")
 
 
-def QA_SU_save_stock_report_income(start_day='20010101',client=DATABASE,force=False):
+def QA_SU_save_stock_report_income(start_day='20010101',ind=0,client=DATABASE,force=False):
     '''
     利润表数据
             输出参数
@@ -239,7 +239,7 @@ distable_profit	float	可分配利润
         return
     report_income = client.stock_report_income_tushare
     print("##################get income reports start####################")
-    for i_ in range(len(df.index)):
+    for i_ in range(ind,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
@@ -260,7 +260,7 @@ distable_profit	float	可分配利润
             report_income.insert_many(json_data)
         print(" Save data to stock_report_income_tushare collection， OK")
 
-def QA_SU_save_stock_report_assetliability(start_day='20010101',client=DATABASE,force=False):
+def QA_SU_save_stock_report_assetliability(start_day='20010101',ind=0,client=DATABASE,force=False):
     '''
     资产负债表数据
 输出参数
@@ -433,7 +433,7 @@ hfs_sales	float	持有待售的负债
     today = QA_util_today_str()
     report_income = client.stock_report_assetliability_tushare
     print("##################get asset liability reports start####################")
-    for i_ in range(len(df.index)):
+    for i_ in range(ind,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
@@ -455,7 +455,7 @@ hfs_sales	float	持有待售的负债
         print(" Save data to stock_report_assetliability_tushare collection， OK")
 
 
-def QA_SU_save_stock_report_cashflow(start_day='20010101',client=DATABASE,force=False):
+def QA_SU_save_stock_report_cashflow(start_day='20010101',ind=0,client=DATABASE,force=False):
     '''
     现金流表数据
 输出参数
@@ -580,7 +580,7 @@ im_n_incr_cash_equ	float	现金及现金等价物净增加额(间接法)
         return
     report_income = client.stock_report_cashflow_tushare
     print("##################get asset cashflow reports start####################")
-    for i_ in range(len(df.index)):
+    for i_ in range(ind,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
@@ -601,7 +601,7 @@ im_n_incr_cash_equ	float	现金及现金等价物净增加额(间接法)
             report_income.insert_many(json_data)
         print(" Save data to stock_report_cashflow_tushare collection， OK")
 
-def QA_SU_save_stock_report_forecast(start_year='2001',client=DATABASE,force=False):
+def QA_SU_save_stock_report_forecast(start_year='2001',ind=0,client=DATABASE,force=False):
     '''
     业绩预告数据
 输出参数
@@ -636,7 +636,7 @@ change_reason	str	业绩变动原因
     print("##################get forcast reports start####################")
     season = ['0331','0630','0930','1231']
     years = range(int(start_year[0,4]),int(today[0:4]))
-    for i_ in range(len(df.index)):
+    for i_ in range(ind,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         start_date = start_year
         time.sleep(1)
@@ -663,7 +663,7 @@ change_reason	str	业绩变动原因
         print(" Save data to stock_report_forcast_tushare collection， OK")
 
 
-def QA_SU_save_stock_report_express(start_day='20010101',client=DATABASE,force=False):
+def QA_SU_save_stock_report_express(start_day='20010101',ind=0,client=DATABASE,force=False):
     '''
     业绩快报数据
 输出参数
@@ -715,7 +715,7 @@ remark	str	备注
         return
     report_income = client.stock_report_express_tushare
     print("##################get express reports start####################")
-    for i_ in range(len(df.index)):
+    for i_ in range(ind,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
@@ -737,7 +737,7 @@ remark	str	备注
         print(" Save data to stock_report_express_tushare collection， OK")
 
 
-def QA_SU_save_stock_report_dividend(start_day='20010101',client=DATABASE,force=False):
+def QA_SU_save_stock_report_dividend(start_day='20010101',ind=0,client=DATABASE,force=False):
     '''
     分红送股数据
 输出参数
@@ -773,7 +773,7 @@ base_share	float	N	基准股本（万）
         return
     report_income = client.stock_report_dividend_tushare
     print("##################get dividend reports start####################")
-    for i_ in range(len(df.index)):
+    for i_ in range(ind,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
@@ -794,7 +794,7 @@ base_share	float	N	基准股本（万）
             report_income.insert_many(json_data)
         print(" Save data to stock_report_express_tushare collection， OK")
 
-def QA_SU_save_stock_report_fina_indicator(start_day='20010101',client=DATABASE,force=False):
+def QA_SU_save_stock_report_fina_indicator(start_day='20010101',ind=0,client=DATABASE,force=False):
     '''
     财务数据
 输出参数，#号默认未返回字段
@@ -979,7 +979,7 @@ equity_yoy	float	净资产同比增长率
         return
     report_income = client.stock_report_finindicator_tushare
     print("##################get fina_indicator reports start####################")
-    for i_ in range(0,len(df.index)):
+    for i_ in range(ind,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
@@ -1004,7 +1004,7 @@ equity_yoy	float	净资产同比增长率
         print(" Save data to stock_report_finindicator_tushare collection， OK")
 
 
-def QA_SU_save_stock_report_audit(start_day='20010101',client=DATABASE,force=False):
+def QA_SU_save_stock_report_audit(start_day='20010101',ind=0,client=DATABASE,force=False):
     '''
     财务审计意见
 输出参数
@@ -1031,7 +1031,7 @@ audit_sign	str	签字会计师
         return
     report_income = client.stock_report_audit_tushare
     print("##################get audit reports start####################")
-    for i_ in range(len(df.index)):
+    for i_ in range(ind,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
@@ -1054,7 +1054,7 @@ audit_sign	str	签字会计师
 
 
 
-def QA_SU_save_stock_report_mainbz(start_day='20010101',client=DATABASE,force=False):
+def QA_SU_save_stock_report_mainbz(start_day='20010101',ind=0,client=DATABASE,force=False):
     '''
     主营业务构成
 输出参数
@@ -1082,7 +1082,7 @@ update_flag	str	是否更新
         return
     report_income = client.stock_report_mainbz_tushare
     print("##################get mainbz reports start####################")
-    for i_ in range(len(df.index)):
+    for i_ in range(ind,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
@@ -1294,7 +1294,7 @@ if __name__ == '__main__':
     #DATABASE.stock_daily_basic_tushare.remove()
 
     #QA_SU_save_stock_daily_basic(start_day='20010101')
-    QA_SU_save_stock_report_fina_indicator(start_day='20010101')
+    QA_SU_save_stock_report_fina_indicator(start_day='20010101',ind=2669)
     QA_SU_save_stock_report_assetliability(start_day='20010101')
     QA_SU_save_stock_report_income(start_day='20010101')
     QA_SU_save_stock_report_cashflow(start_day='20010101')
