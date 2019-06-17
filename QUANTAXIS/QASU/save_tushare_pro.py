@@ -29,6 +29,9 @@ import re
 import time
 import pandas as pd
 from QUANTAXIS.QAUtil.QADate import QA_util_today_str
+import numpy as np
+
+import array
 from concurrent.futures import ThreadPoolExecutor
 
 
@@ -37,6 +40,11 @@ from QUANTAXIS.QAFetch.QATushare import (QA_fetch_get_stock_day,
                                          QA_fetch_get_stock_list,
                                          QA_fetch_get_trade_date,
                                          QA_fetch_get_lhb)
+
+from QUANTAXIS.QAFetch.QATusharePro import (QA_fetch_get_assetAliability,
+                                            QA_fetch_get_cashflow,
+                                            QA_fetch_get_income,
+                                            QA_fetch_get_dailyindicator)
 from QUANTAXIS.QAUtil import (QA_util_date_stamp, QA_util_log_info,
                               QA_util_time_stamp, QA_util_to_json_from_pandas,
                               trade_date_sse)
@@ -1200,11 +1208,82 @@ adj_factor	float	复权因子
 
 
 def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=False):
-    stock_daily = client.stock_daily_basic_tushare
-    ref = stock_daily.find({'ts_code': df.iloc[i_].ts_code}).sort([('trade_date', -1)]).limit(1)
-    times = pd.date_range(start='20010101', end='20191231', freq='AS-JAN')
+    daily_basic = client.stock_daily_basic_tushare
+    pro = ts.pro_api()
+    basic = pro.stock_basic()
+    times = pd.date_range(start=start_day, end=datetime.datetime.now().strftime('%Y%m%d'), freq='6MS')
+    industry_daily = client.industry_daily
     for i_ in range(len(times)):
-        stock_daily.find({'date': df.iloc[i_].ts_code})
+        end = None
+        if i_ + 1 == len(times):
+            end = datetime.datetime.now().strftime('%Y%m%d')
+        else:
+            end = times[i_ + 1].strftime('%Y%m%d')
+        curdaily = QA_fetch_get_dailyindicator(times[i_].strftime('%Y%m%d'),end)# daily_basic.find({"trade_date": {"$gte": times[i_].strftime('%Y%m%d'), "$lt": end}})
+        start_2years_bf = (times[i_] - pd.Timedelta(730, unit='D')).strftime('%Y%m%d')
+        start_halfyear_bf = (times[i_] - pd.Timedelta(180, unit='D')).strftime('%Y%m%d')
+        curbasic = basic[(basic.list_date < start_2years_bf)] #basic.list_status == 'D' 去掉了,考虑到list_status不是对历史状态的描述
+
+        #print(start_halfyear_bf)
+        ast = QA_fetch_get_assetAliability(start_halfyear_bf, end)
+        profit = QA_fetch_get_income(start_halfyear_bf, end)
+        cash = QA_fetch_get_cashflow(start_halfyear_bf, end)
+
+        def _industry_indicator(data, time, curdaily, ast, profit, cash):
+            df = pd.merge(data, curdaily, on='ts_code')  # 内联，可剔除整个计算周期内无交易的code
+            #print(df.columns)
+            #print(df.head())
+            first = df.groupby('ts_code', as_index=False).head(1)  # 各个code取第一条有交易数据
+            in_index = client.index_compose #指数组成信息
+            in_index.remove({'ts_code': data.name, 'update': first.trade_date.min()})
+            first.loc[:, 'time'] = time
+            first.loc[:, 'name'] = data.name
+            uplimit = first.total_mv.describe(percentiles=[.9])[5]
+            # first = first.sort_values(by=['total_mv'], ascending=False)
+            first = first[first.total_mv < uplimit].nlargest(10, 'total_mv')  # 取市值前10
+            index_json = {"name": data.name, "time": time, " compose": first.ts_code.values.tolist(), "init_time": first.trade_date.values.tolist(), "total": len(first), "scare": first.total_mv.sum()}
+            #json_data = QA_util_to_json_from_pandas(index_json)
+            print(json.dumps(index_json))
+            in_index.insert_many(json.dumps(index_json))  # 保存每期指数构成成分，半年更新一次指数构成
+            first.loc[:, 'total_mv_rate'] = first.total_mv / (first.total_mv.sum())
+            first.loc[:, 'deal_mv_rate'] = first.turnover_rate_f * first.close / ((first.turnover_rate_f * first.close).sum())  # TODO 考虑改进一下，用sma5来计算
+            df = df[df.ts_code.isin(first.ts_code.values)]  # 取总市值前十的股票构成该行业指数
+            ast = ast[ast.ts_code.isin(first.ts_code.values)]
+
+            def _season(data, ast):
+                curast = ast[ast.ts_code == data.name]
+                data.loc[:, 'season'] = None
+                for index, item in enumerate(curast):
+                    judge = (data.trade_date >= item.ann_date)
+                    if index + 1 != len(curast):
+                        judge = judge & (data.trade_date < curast[index + 1].ann_date)
+                    data[judge].loc[:, 'season'] = item.end_date
+
+            df = df.groupby('ts_code', as_index=False).apply(_season)
+
+            df = pd.merge(df, ast, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
+            df = pd.merge(df, profit, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
+            df = pd.merge(df, cash, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
+
+            def _indicator_caculate(data):
+                ind_deal_mv = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()  # 当日有成交的总金额/当日股票市值占比 =估算的行业成交净额
+                ind_total_mv = data.total_mv.sum() / data.total_mv_rate.sum()  # 估算行业总市值
+                n_income = data.n_income.sum()  # 净利润(含少数股东损益)
+                n_income_attr_p = data.n_income_attr_p.sum()  # 净利润(含少数股东损益)
+
+            df.groupby('trade_date', as_index=False).apply(_indicator_caculate)
+
+        industry = curbasic.groupby('industry').apply(_industry_indicator, time=times[i_].strftime('%Y%m%d'), curdaily=curdaily, ast=ast, profit=profit, cash=cash)
+
+        print(" Get industry daily from tushare,reports count is %d" % len(industry))
+        if not industry.empty:
+            # coll = client.stock_report_income_tushare
+            # client.drop_collection(coll)
+            json_data = QA_util_to_json_from_pandas(industry)
+            # json_data = json.loads(df.reset_index().to_json(orient='records'))
+            industry_daily.insert_many(json_data)
+        print(" Save data to industry_daily_tushare collection， OK")
+
 
 
 if __name__ == '__main__':
@@ -1234,8 +1313,28 @@ if __name__ == '__main__':
     #     future_result3 = pool.submit(QA_SU_save_stock_report_cashflow)
     #     future_result3.add_done_callback(lambda: print('QA_SU_save_stock_report_cashflow finished'))
 
-    print(pd.date_range(start='20010101', end='20191231', freq='AS-JAN'))
-    print('#####################all done##########################')
+    # a = pd.date_range(start='20010101', end='20191231', freq='6MS')
+    # print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
+    # #print(time.strftime('%Y%m%d',time.localtime((a[0] - pd.Timedelta(180, unit='D')))))
+    # print(type(datetime.datetime.now()))
+    # print(type(time.localtime()))
+    #QA_SU_save_industry_indicator(start_day='20040101')
+    dict1 = {"age": "12","bb":"gg"}
+    json_info = json.dumps(dict1)
+    in_index = DATABASE.index_compose  # 指数组成信息
+    in_index.insert_many(json.dumps(json_info))
+    #print(json_info)
+    # print(a[0].strftime('%Y%m%d'))
+    # print((a[0] - pd.Timedelta(180, unit='D')).strftime('%Y%m%d'))#.strftime('%Y%m%d')
+    #
+    # print('#####################all done##########################')
+    # a = np.array([1, 2, 3])
+    # b = array.array('i',a)
+    # c = [1,2,3]
+    # print(type(a.tolist()))
+    # print(type(a))
+    # print(type(c))
+
 
 
     #print('2019-05-22'>'2019-08-01')

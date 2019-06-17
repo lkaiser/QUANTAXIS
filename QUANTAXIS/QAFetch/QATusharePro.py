@@ -83,6 +83,7 @@ def QA_fetch_get_assetAliability(start, end,code=None,collections=DATABASE.stock
         "$gte": start}}
     if code:
         query['ts_code'] = {'$in': code}
+    print(query)
     cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("end_date",1)])
 
     return pd.DataFrame([item for item in cursor]).sort_values(['ts_code','end_date'], ascending = True)
@@ -94,7 +95,8 @@ def QA_fetch_get_cashflow(start, end,code=None,collections=DATABASE.stock_report
     if code:
         query['ts_code'] = {'$in': code}
     cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("end_date",1)])
-
+    #df = pd.DataFrame([item for item in cursor])
+    #print(df.head())
     return pd.DataFrame([item for item in cursor]).sort_values(['ts_code','end_date'], ascending = True)
 
 def QA_fetch_get_income(start, end,code=None,collections=DATABASE.stock_report_income_tushare):
