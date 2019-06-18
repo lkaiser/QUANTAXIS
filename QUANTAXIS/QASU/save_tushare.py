@@ -291,8 +291,3 @@ def QA_save_lhb(client=DATABASE):
             time.sleep(2)
             continue
 
-
-if __name__ == '__main__':
-    #QA_SU_save_stock_daily_basic()
-    #date_list = [x.strftime('% Y - % m - % d') for x in list(pd.date_range(start=begin_date, end=end_date))]
-    #print(pd.date_range('2019-01-01','2019-01-23', freq='1d').strftime('%Y-%m-%d').values)
