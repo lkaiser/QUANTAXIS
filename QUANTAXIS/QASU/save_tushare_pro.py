@@ -1291,7 +1291,6 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
                 n_income = data.n_income.sum()  # 净利润(含少数股东损益)
                 n_income_attr_p = data.n_income_attr_p.sum()  # 净利润(含少数股东损益)
                 return pd.DataFrame({"industry":industry,"date":data.name,"ind_deal_mv":ind_deal_mv,"ind_total_mv":ind_total_mv,"n_income":n_income,"n_income_attr_p":n_income_attr_p},index=[0])
-
             return df.groupby('trade_date', as_index=False).apply(_indicator_caculate,industry=data.name)
 
         #print(times[i_])
