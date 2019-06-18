@@ -1215,64 +1215,89 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
     industry_daily = client.industry_daily
     for i_ in range(len(times)):
         end = None
+        end_halfyear_af = None
         if i_ + 1 == len(times):
             end = datetime.datetime.now().strftime('%Y%m%d')
+            end_halfyear_af = (datetime.datetime.now()+pd.Timedelta(180, unit='D')).strftime('%Y%m%d')
         else:
             end = times[i_ + 1].strftime('%Y%m%d')
-        curdaily = QA_fetch_get_dailyindicator(times[i_].strftime('%Y%m%d'),end)# daily_basic.find({"trade_date": {"$gte": times[i_].strftime('%Y%m%d'), "$lt": end}})
+            end_halfyear_af = (times[i_] + pd.Timedelta(180, unit='D')).strftime('%Y%m%d')
+        curdaily = QA_fetch_get_dailyindicator(times[i_].strftime('%Y%m%d'),end).sort_values(by=['trade_date'])# daily_basic.find({"trade_date": {"$gte": times[i_].strftime('%Y%m%d'), "$lt": end}})
         start_2years_bf = (times[i_] - pd.Timedelta(730, unit='D')).strftime('%Y%m%d')
         start_halfyear_bf = (times[i_] - pd.Timedelta(180, unit='D')).strftime('%Y%m%d')
         curbasic = basic[(basic.list_date < start_2years_bf)] #basic.list_status == 'D' 去掉了,考虑到list_status不是对历史状态的描述
 
-        #print(start_halfyear_bf)
-        ast = QA_fetch_get_assetAliability(start_halfyear_bf, end)
-        profit = QA_fetch_get_income(start_halfyear_bf, end)
-        cash = QA_fetch_get_cashflow(start_halfyear_bf, end)
+        #先按ann_date，再按end_date排序，比如年报和1季报同日公布,此时还是需要排个序的
+        ast = QA_fetch_get_assetAliability(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
+        profit = QA_fetch_get_income(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
+        cash = QA_fetch_get_cashflow(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
 
         def _industry_indicator(data, time, curdaily, ast, profit, cash):
             df = pd.merge(data, curdaily, on='ts_code')  # 内联，可剔除整个计算周期内无交易的code
-            #print(df.columns)
-            #print(df.head())
             first = df.groupby('ts_code', as_index=False).head(1)  # 各个code取第一条有交易数据
             in_index = client.index_compose #指数组成信息
-            in_index.remove({'ts_code': data.name, 'update': first.trade_date.min()})
+            in_index.remove({'name': data.name, 'time': time})
             first.loc[:, 'time'] = time
             first.loc[:, 'name'] = data.name
             uplimit = first.total_mv.describe(percentiles=[.9])[5]
             # first = first.sort_values(by=['total_mv'], ascending=False)
             first = first[first.total_mv < uplimit].nlargest(10, 'total_mv')  # 取市值前10
-            index_json = {"name": data.name, "time": time, " compose": first.ts_code.values.tolist(), "init_time": first.trade_date.values.tolist(), "total": len(first), "scare": first.total_mv.sum()}
-            #json_data = QA_util_to_json_from_pandas(index_json)
-            #print(json.dumps(index_json))
+            index_json = {"name": data.name, "time": time, " compose": first.ts_code.values.tolist(), "init_time": first.trade_date.values.tolist(), "total": len(first), "scare": first.total_mv.sum(),'update_time':datetime.datetime.now()}
+
+            if  len(first)<3: #小于3只，没必要做指数了
+                return None
+
             in_index.insert_one(index_json)  # 保存每期指数构成成分，半年更新一次指数构成
             first.loc[:, 'total_mv_rate'] = first.total_mv / (first.total_mv.sum())
             first.loc[:, 'deal_mv_rate'] = first.turnover_rate_f * first.close / ((first.turnover_rate_f * first.close).sum())  # TODO 考虑改进一下，用sma5来计算
             df = df[df.ts_code.isin(first.ts_code.values)]  # 取总市值前十的股票构成该行业指数
+
+
+
+            df = pd.merge(df,first.loc[:,['ts_code','deal_mv_rate','total_mv_rate']],on=['ts_code'],how='left')
             ast = ast[ast.ts_code.isin(first.ts_code.values)]
 
             def _season(data, ast):
                 curast = ast[ast.ts_code == data.name]
                 data.loc[:, 'season'] = None
-                for index, item in enumerate(curast):
-                    judge = (data.trade_date >= item.ann_date)
-                    if index + 1 != len(curast):
-                        judge = judge & (data.trade_date < curast[index + 1].ann_date)
-                    data[judge].loc[:, 'season'] = item.end_date
+                for i_ in range(0, curast.shape[0]): #存在年报被忽略的可能性
+                #for index, item in enumerate(curast):
+                    judge = (data.trade_date >= curast.iloc[i_].ann_date)
+                    if i_ + 1 != curast.shape[0]:
+                        judge = judge & (data.trade_date < curast.iloc[i_ + 1].ann_date)
 
-            df = df.groupby('ts_code', as_index=False).apply(_season)
+                    data.loc[judge, 'season'] = curast.iloc[i_].end_date
+                if curast.shape[0]>0:
+                    data.loc[data.season.isnull(), 'season'] = curast.iloc[0].end_date# 再有为空，只能是前面数据缺失了，用最近的补缺
+                    return data
+                else :
+                    return None
+                #return data
+
+            df = df.groupby('ts_code', as_index=False).apply(_season,ast=ast)
+            df = df.dropna(how='all')
+
+            if not len(df): #存在全部财务数据丢失的可能，
+                return None
+
 
             df = pd.merge(df, ast, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
             df = pd.merge(df, profit, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
             df = pd.merge(df, cash, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
 
-            def _indicator_caculate(data):
+            def _indicator_caculate(data,industry):
                 ind_deal_mv = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()  # 当日有成交的总金额/当日股票市值占比 =估算的行业成交净额
                 ind_total_mv = data.total_mv.sum() / data.total_mv_rate.sum()  # 估算行业总市值
                 n_income = data.n_income.sum()  # 净利润(含少数股东损益)
                 n_income_attr_p = data.n_income_attr_p.sum()  # 净利润(含少数股东损益)
+                return pd.DataFrame({"industry":industry,"date":data.name,"ind_deal_mv":ind_deal_mv,"ind_total_mv":ind_total_mv,"n_income":n_income,"n_income_attr_p":n_income_attr_p},index=[0])
 
-            df.groupby('trade_date', as_index=False).apply(_indicator_caculate)
+            return df.groupby('trade_date', as_index=False).apply(_indicator_caculate,industry=data.name)
 
+        #print(times[i_])
+        #print(curdaily.loc[:,['trade_date','ts_code','close']].head(10))
+        #print(len(curbasic))
+        #print(curbasic[curbasic.industry==u'专用机械'].loc[:,['ts_code','symbol','industry','area']])
         industry = curbasic.groupby('industry').apply(_industry_indicator, time=times[i_].strftime('%Y%m%d'), curdaily=curdaily, ast=ast, profit=profit, cash=cash)
 
         print(" Get industry daily from tushare,reports count is %d" % len(industry))
@@ -1294,10 +1319,13 @@ if __name__ == '__main__':
     #DATABASE.stock_daily_basic_tushare.remove()
 
     #QA_SU_save_stock_daily_basic(start_day='20010101')
-    QA_SU_save_stock_report_fina_indicator(start_day='20010101',ind=2669)
-    QA_SU_save_stock_report_assetliability(start_day='20010101')
-    QA_SU_save_stock_report_income(start_day='20010101')
-    QA_SU_save_stock_report_cashflow(start_day='20010101')
+    # QA_SU_save_stock_report_fina_indicator(start_day='20010101',ind=2669)
+    # QA_SU_save_stock_report_assetliability(start_day='20010101')
+    # QA_SU_save_stock_report_income(start_day='20010101')
+    # QA_SU_save_stock_report_cashflow(start_day='20010101')
+
+
+    QA_SU_save_industry_indicator(start_day='20040101')
 
     result = []
     # def when_done(r):
@@ -1327,6 +1355,19 @@ if __name__ == '__main__':
     # print(a[0].strftime('%Y%m%d'))
     # print((a[0] - pd.Timedelta(180, unit='D')).strftime('%Y%m%d'))#.strftime('%Y%m%d')
     #
+
+    # def _test(data):
+    #     if data.name == "baidu":
+    #         return None
+    #     return data
+    # data = {'name': ['google', 'baidu', 'yahho'], 'marks': [100, 200, 300], 'price': [1, 2, 3]}
+    #
+    # res = pd.DataFrame(data)
+    # print(res)
+    # r = res.groupby("name").apply(_test)
+    # r = r.dropna(how='all')
+    # print('#####################after ##########################')
+    # print(r)
     print('#####################all done##########################')
     # a = np.array([1, 2, 3])
     # b = array.array('i',a)
