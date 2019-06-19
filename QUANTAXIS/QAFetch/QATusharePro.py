@@ -83,7 +83,6 @@ def QA_fetch_get_assetAliability(start, end,code=None,collections=DATABASE.stock
         "$gte": start}}
     if code:
         query['ts_code'] = {'$in': code}
-    print(query)
     cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("end_date",1)])
 
     return pd.DataFrame([item for item in cursor]).sort_values(['ts_code','end_date'], ascending = True)
@@ -122,6 +121,16 @@ def QA_fetch_get_dailyindicator(start, end,code=None,collections=DATABASE.stock_
         "$gte": start}}
     if code:
         query['ts_code'] = {'$in': code}
+    cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("trade_date",1)])
+
+    return pd.DataFrame([item for item in cursor])#sort_values(['ts_code','trade_date'], ascending = True)
+
+def QA_fetch_get_industry_index(start, end,industry=None,collections=DATABASE.industry_daily_tushare):
+    query = {"date": {
+        "$lte": end,
+        "$gte": start}}
+    if industry:
+        query['industry'] = {'$in': industry}
     cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("trade_date",1)])
 
     return pd.DataFrame([item for item in cursor])#sort_values(['ts_code','trade_date'], ascending = True)

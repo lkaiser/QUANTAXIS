@@ -16,15 +16,27 @@ from matplotlib import pyplot as plt
 from statsmodels import api as sm, regression
 from sklearn import metrics
 import pandas as pd
+from contextlib import contextmanager
+from sklearn import  linear_model
+#导入线性模型和多项式特征构造模块
+from sklearn.preprocessing import  PolynomialFeatures
 
-#from ..CoreBu import ABuEnv
-#from ..CoreBu.ABuPdHelper import pd_rolling_mean
-#from ..UtilBu.ABuDTUtil import plt_show
-#from ..UtilBu.ABuStatsUtil import euclidean_distance_xy, manhattan_distances_xy, cosine_distances_xy
 
 
 log_func =  print
 
+@contextmanager
+def plt_show():
+    """
+        在conda5.00封装的matplotlib中全局rc的figsize在使用notebook并且开启直接show的模式下
+        代码中显示使用plt.show会将rc中的figsize重置，所以需要显示使用plt.show的地方，通过plt_show
+        上下文管理器进行规范控制：
+        1. 上文figsize设置ABuEnv中的全局g_plt_figsize
+        2. 下文显示调用plt.show()
+    """
+    plt.figure(figsize=(14, 7))
+    yield
+    plt.show()
 
 def regress_xy(x, y, mode=True, zoom=False, show=False):
     """
@@ -104,6 +116,22 @@ def calc_regress_deg(y, show=True):
     deg = np.rad2deg(rad)
     return deg
 
+def calc_regress_deg(y,yi, show=True):
+    """
+    将y值 zoom到与x一个级别，之后再fit出弧度转成角度
+    1 多个股票的趋势比较提供量化基础，只要同一个时间范围，就可以比较
+    2 接近视觉感受到的角度
+    :param y:  可迭代序列
+    :param yi: 第i个点对应的斜率
+    :param show: 是否可视化结果
+    :return: deg角度float值
+    """
+    # 将y值 zoom到与x一个级别
+    model, deriv = regress_y_polynomial(y, mode=True, zoom=True, show=show)
+    rad = deriv(yi)
+    # fit出弧度转成角度
+    return rad
+
 
 def regress_xy_polynomial(x, y, poly=1, zoom=False, show=False):
     """
@@ -121,6 +149,10 @@ def regress_xy_polynomial(x, y, poly=1, zoom=False, show=False):
         y = zoom_factor * y
 
     polynomial = np.polynomial.Chebyshev.fit(x, y, poly)
+    #print(polynomial)
+    print(polynomial.degree())
+    p2 = polynomial.deriv(m=1)
+    #print(p2(x))
     # noinspection PyCallingNonCallable
     y_fit = polynomial(x)
 
@@ -131,7 +163,7 @@ def regress_xy_polynomial(x, y, poly=1, zoom=False, show=False):
             plt.plot(x, y_fit)
             plt.title('{} poly zoom ={}'.format(poly, zoom))
 
-    return y_fit
+    return y_fit,p2
 
 
 def regress_y_polynomial(y, poly=1, zoom=False, show=False):
@@ -360,5 +392,25 @@ def search_best_poly(y, poly_min=1, poly_max=100, zoom=False, show=True, metrics
         poly += 1
     return poly
 if __name__ == '__main__':
-#504 －> rolling_window = \
+    y = np.array([20,20.5,20.9,21,21.2,21.5,21.3,22,22.5,22.3,22,21.5,22,22.5,23,23.5,24,24.5,25,26,28,30,33])
+    x = np.arange(0, len(y))
+    x = np.array(x).reshape([len(y), 1])
+    #print(x)
+    t = regress_y_polynomial(y, poly=3,show=True)
+    poly_reg = PolynomialFeatures(degree=3)
+    X_ploy = poly_reg.fit_transform(x)
+    lin_reg_2 = linear_model.LinearRegression()
+    lin_reg_2.fit(X_ploy, y)
+    # 查看回归方程系数
+    print('Cofficients:', lin_reg_2.coef_)
+    # 查看回归方程截距
+    print('intercept', lin_reg_2.intercept_)
+    X = np.arange(0, len(y)).reshape([-1, 1])
+    plt.scatter(x, y, color='red')
+    plt.plot(x, lin_reg_2.predict(poly_reg.fit_transform(X)), color='blue')
+    plt.xlabel('Area')
+    plt.ylabel('Price')
+    plt.show()
 
+    # print(t)
+    # pass

@@ -1212,7 +1212,7 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
     pro = ts.pro_api()
     basic = pro.stock_basic()
     times = pd.date_range(start=start_day, end=datetime.datetime.now().strftime('%Y%m%d'), freq='6MS')
-    industry_daily = client.industry_daily
+    industry_daily = client.industry_daily_tushare
     for i_ in range(len(times)):
         end = None
         end_halfyear_af = None
@@ -1317,11 +1317,14 @@ if __name__ == '__main__':
     #print(pd.date_range('20190101',periods=2, freq='1d').strftime('%Y%m%d').values[-1])
     #DATABASE.stock_daily_basic_tushare.remove()
 
-    #QA_SU_save_stock_daily_basic(start_day='20010101')
-    QA_SU_save_stock_report_fina_indicator(start_day='20010101',ind=2669)
-    QA_SU_save_stock_report_assetliability(start_day='20010101')
-    QA_SU_save_stock_report_income(start_day='20010101')
-    QA_SU_save_stock_report_cashflow(start_day='20010101')
+    QA_SU_save_stock_daily_basic(start_day='20190101')
+    QA_SU_save_stock_report_fina_indicator(start_day='20190101')
+    QA_SU_save_stock_report_assetliability(start_day='20190101')
+    QA_SU_save_stock_report_income(start_day='20190101')
+    QA_SU_save_stock_report_cashflow(start_day='20190101')
+
+
+    #QA_SU_save_industry_indicator(start_day='20010101')
 
     result = []
     # def when_done(r):
@@ -1351,6 +1354,19 @@ if __name__ == '__main__':
     # print(a[0].strftime('%Y%m%d'))
     # print((a[0] - pd.Timedelta(180, unit='D')).strftime('%Y%m%d'))#.strftime('%Y%m%d')
     #
+
+    # def _test(data):
+    #     if data.name == "baidu":
+    #         return None
+    #     return data
+    # data = {'name': ['google', 'baidu', 'yahho'], 'marks': [100, 200, 300], 'price': [1, 2, 3]}
+    #
+    # res = pd.DataFrame(data)
+    # print(res)
+    # r = res.groupby("name").apply(_test)
+    # r = r.dropna(how='all')
+    # print('#####################after ##########################')
+    # print(r)
     print('#####################all done##########################')
     # a = np.array([1, 2, 3])
     # b = array.array('i',a)
