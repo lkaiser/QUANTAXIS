@@ -116,19 +116,19 @@ def calc_regress_deg(y, show=True):
     deg = np.rad2deg(rad)
     return deg
 
-def calc_regress_deg(y,yi, show=True):
+def calc_regress_polynomial_deg(y,xi,poly=1,show=True):
     """
     将y值 zoom到与x一个级别，之后再fit出弧度转成角度
-    1 多个股票的趋势比较提供量化基础，只要同一个时间范围，就可以比较
-    2 接近视觉感受到的角度
+    1 不限定时间范围，拟合的多项式求导，求出xi处导数值作为 xi点趋势
+    2 弥补calc_regress_deg只能拟合直线的缺点，本质上deg
     :param y:  可迭代序列
     :param yi: 第i个点对应的斜率
     :param show: 是否可视化结果
     :return: deg角度float值
     """
     # 将y值 zoom到与x一个级别
-    model, deriv = regress_y_polynomial(y, mode=True, zoom=True, show=show)
-    rad = deriv(yi)
+    model, deriv = regress_y_polynomial(y, poly, zoom=True, show=show)
+    rad = deriv(xi)
     # fit出弧度转成角度
     return rad
 
