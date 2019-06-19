@@ -143,6 +143,7 @@ def regress_xy_polynomial(x, y, poly=1, zoom=False, show=False):
     :param show: 是否可视化显示拟合结果
     :return: y_fit
     """
+
     if zoom:
         # 将y值 zoom到与x一个级别，不可用ABuScalerUtil.scaler_xy, 因为不管x > y还y > x都拿 x.max() / y.max()
         zoom_factor = x.max() / y.max()
