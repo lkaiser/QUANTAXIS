@@ -26,8 +26,7 @@ import datetime
 import json
 import re
 import time
-import pandas as pd
-import QUANTAXIS as QA
+
 
 
 from QUANTAXIS.QAFetch.QATushare import (QA_fetch_get_stock_day,
@@ -41,8 +40,8 @@ from QUANTAXIS.QAUtil import (QA_util_date_stamp, QA_util_log_info,
 from QUANTAXIS.QAUtil.QASetting import DATABASE
 
 
-import tushare as QATs
-QATs.set_token('0f7da64f6c87dfa58456e0ad4c7ccf31d6c6e89458dc5b575e028c64')
+import tushare as ts
+
 
 def QA_save_stock_day_all(client=DATABASE):
     df = ts.get_stock_basics()
@@ -90,8 +89,8 @@ def QA_SU_save_stock_terminated(client=DATABASE):
     # 🛠todo 已经失效从wind 资讯里获取
     # 这个函数已经失效
     print("！！！ tushare 这个函数已经失效！！！")
-    df = QATs.get_terminated()
-    #df = QATs.get_suspended()
+    df = ts.get_terminated()
+    #df = ts.get_suspended()
     print(" Get stock terminated from tushare,stock count is %d  (终止上市股票列表)" % len(df))
     coll = client.stock_terminated
     client.drop_collection(coll)
@@ -99,55 +98,6 @@ def QA_SU_save_stock_terminated(client=DATABASE):
     coll.insert(json_data)
     print(" 保存终止上市股票列表 到 stock_terminated collection， OK")
 
-
-
-def QA_SU_save_stock_daily_basic(client=DATABASE):
-    '''
-            名称	类型	描述
-            ts_code	str	TS股票代码
-            trade_date	str	交易日期
-            close	float	当日收盘价
-            turnover_rate	float	换手率（%）
-            turnover_rate_f	float	换手率（自由流通股）
-            volume_ratio	float	量比
-            pe	float	市盈率（总市值/净利润）
-            pe_ttm	float	市盈率（TTM）
-            pb	float	市净率（总市值/净资产）
-            ps	float	市销率
-            ps_ttm	float	市销率（TTM）
-            total_share	float	总股本 （万）
-            float_share	float	流通股本 （万）
-            free_share	float	自由流通股本 （万）
-            total_mv	float	总市值 （万元）
-            circ_mv	float	流通市值（万元）
-
-            add by minijjlk
-
-        在命令行工具 quantaxis 中输入 save stock_daily_basic_tushare 中的命令
-        :param client:
-        :return:
-        '''
-    pro = QATs.pro_api()
-    df = pro.stock_basic()
-    if df.isEmpty():
-        print("there is no stock info,stock count is %d" % len(df))
-        return
-    today = QA.QA_util_date_today()
-    days = pd.date_range('2019-01-01', today, freq='1d').strftime('%Y-%m-%d').values
-    stock_daily = client.stock_daily_basic_tushare
-    for i_ in range(len(df.index)):
-        start_date = '20010101'
-        ref = stock_daily.find({'code': df.iloc[i_].symbol})
-        if ref.count() > 0:
-            start_date = QA_util_get_next_day(ref[-1]['trade_date'])
-        df = pro.daily_basic(ts_code=df.iloc[i_].symbol, start_date=start_date,end_date=today.replace("-",""))
-        df = QATs.get_stock_basics()
-        print(" Get stock daily basic from tushare,stock count is %d" % len(df))
-        coll = client.stock_daily_basic_tushare
-        client.drop_collection(coll)
-        json_data = json.loads(df.reset_index().to_json(orient='records'))
-        coll.insert(json_data)
-        print(" Save data to stock_daily_basic_tushare collection， OK")
 
 def QA_SU_save_stock_info_tushare(client=DATABASE):
     '''
@@ -183,7 +133,7 @@ def QA_SU_save_stock_info_tushare(client=DATABASE):
     :param client:
     :return:
     '''
-    df = QATs.get_stock_basics()
+    df = ts.get_stock_basics()
     print(" Get stock info from tushare,stock count is %d" % len(df))
     coll = client.stock_info_tushare
     client.drop_collection(coll)
@@ -205,7 +155,7 @@ def QA_SU_save_stock_info(client=DATABASE):
 
 
 def QA_save_stock_day_all_bfq(client=DATABASE):
-    df = QATs.get_stock_basics()
+    df = ts.get_stock_basics()
 
     __coll = client.stock_day_bfq
     __coll.ensure_index('code')
@@ -231,7 +181,7 @@ def QA_save_stock_day_all_bfq(client=DATABASE):
 
 
 def QA_save_stock_day_with_fqfactor(client=DATABASE):
-    df = QATs.get_stock_basics()
+    df = ts.get_stock_basics()
 
     __coll = client.stock_day
     __coll.ensure_index('code')
@@ -291,3 +241,6 @@ def QA_save_lhb(client=DATABASE):
             time.sleep(2)
             continue
 
+
+if __name__ == '__main__':
+    QA_save_lhb()
