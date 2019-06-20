@@ -1206,8 +1206,31 @@ adj_factor	float	复权因子
             report_income.insert_many(json_data)
         print(" Save data to stock_daily_adj_tushare collection， OK")
 
+def QA_SU_save_single_season_indicator(start_day='20010101',ind=0,client=DATABASE,force=False):
+    '''
+    计算所有单季度数据
+    :param start_day:
+    :param client:
+    :param force:
+    :return:
+    '''
+    pro = ts.pro_api()
+    df = pro.stock_basic()
+    now = datetime.datetime.now().strftime('%Y%m%d')
+    for i_ in range(ind, len(df.index)):
+        income = QA_fetch_get_income(start_day,now).sort_values(by=['ann_date', 'end_date']).sort_values(by=['ann_date','end_date'])
+        #for()
+
+
 
 def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=False):
+    '''
+    行业因子计算,包含基本因子及各种衍生因子
+    :param start_day:
+    :param client:
+    :param force:
+    :return:
+    '''
     daily_basic = client.stock_daily_basic_tushare
     pro = ts.pro_api()
     basic = pro.stock_basic()
@@ -1231,8 +1254,9 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
         ast = QA_fetch_get_assetAliability(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
         profit = QA_fetch_get_income(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
         cash = QA_fetch_get_cashflow(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
+        fina = QA_fetch_get_dailyindicator(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
 
-        def _industry_indicator(data, time, curdaily, ast, profit, cash):
+        def _industry_indicator(data, time, curdaily, ast, profit, cash,fina):
             df = pd.merge(data, curdaily, on='ts_code')  # 内联，可剔除整个计算周期内无交易的code
             first = df.groupby('ts_code', as_index=False).head(1)  # 各个code取第一条有交易数据
             in_index = client.index_compose #指数组成信息
@@ -1284,12 +1308,53 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
             df = pd.merge(df, ast, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
             df = pd.merge(df, profit, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
             df = pd.merge(df, cash, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
+            df = pd.merge(df, fina, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
+            #df.dropna
 
             def _indicator_caculate(data,industry):
-                ind_deal_mv = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()  # 当日有成交的总金额/当日股票市值占比 =估算的行业成交净额
-                ind_total_mv = data.total_mv.sum() / data.total_mv_rate.sum()  # 估算行业总市值
+                '''
+                行业趋势 计算总市值,流通市值,总扣非盈利,总净资产,总资产,总成交量,及趋势（一阶导数）等因子计算
+                :param data:
+                :param industry:
+                :return:
+                '''
+
+                ind_deal_mv = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()  # 当日有成交的总金额/当日股票市值占比 =估算的行业成交净额（有日行情的个股）
+                ind_total_mv = data.total_mv.sum() / data.total_mv_rate.sum()  # 估算行业总市值（有日行情的个股）
+
+                df = data.dropna(subset = ["total_share", "total_revenue","net_profit","total_revenue_ps"]) #drop掉ast、profit、cash、fina任意为空的
+
+                ind_deal_mv_p = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()
+                ind_total_mv_p = data.total_mv.sum() / data.total_mv_rate.sum()
+                total_revenue = data.total_revenue.sum() #总收入
+                revenue = data.revenue.sum() #营业收入
+                total_cogs = data.total_cogs.sum()#总成本
+                operate_profit = data.operate_profit.sum()#营业利润
                 n_income = data.n_income.sum()  # 净利润(含少数股东损益)
                 n_income_attr_p = data.n_income_attr_p.sum()  # 净利润(含少数股东损益)
+                profit_dedt = data.profit_dedt.sum() #扣非净利润
+                gross_margin = data.gross_margin.sum() #毛利
+                op_income = data.op_income.sum() #经营活动净收益
+                q_opincome = data.q_opincome.sum() #单季度经营活动净收益
+                q_dtprofit = data.q_dtprofit.sum() #扣除非经常损益后的单季度净利润
+                inventories = data.inventories.sum() #存货
+                notes_receiv = data.notes_receiv.sum() #应收票据
+                accounts_receiv = data.accounts_receiv.sum() #应收账款
+                notes_payable = data.notes_payable.sum() #应付票据
+                acct_payable = data.acct_payable.sum() #应付账款
+                money_cap = data.money_cap.sum() #货币资金
+                fix_assets = data.fix_assets.sum() #固定资产
+                cip = data.cip.sum() #在建
+                r_and_d = data.data.r_and_d.sum() #研发支出
+                goodwill = data.goodwill.sum() #商誉
+                total_cur_assets = data.total_cur_assets.sum() #流动资产
+                total_cur_liab = data.total_cur_liab.sum() #流动负债
+                total_hldr_eqy_exc_min_int = data.total_hldr_eqy_exc_min_int.sum() #权益，不含少数股东
+                n_cashflow_act = data.n_cashflow_act.sum() #经营活动现金流净额
+                n_cashflow_inv_act = data.n_cashflow_inv_act.sum() #投资活动现金流净额
+                free_cashflow = data.free_cashflow.sum() #自由现金流净额
+                n_cash_flows_fnc_act = data.n_cash_flows_fnc_act.sum() #筹资现金流净额
+
                 return pd.DataFrame({"industry":industry,"date":data.name,"ind_deal_mv":ind_deal_mv,"ind_total_mv":ind_total_mv,"n_income":n_income,"n_income_attr_p":n_income_attr_p},index=[0])
             return df.groupby('trade_date', as_index=False).apply(_indicator_caculate,industry=data.name)
 
@@ -1297,7 +1362,7 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
         #print(curdaily.loc[:,['trade_date','ts_code','close']].head(10))
         #print(len(curbasic))
         #print(curbasic[curbasic.industry==u'专用机械'].loc[:,['ts_code','symbol','industry','area']])
-        industry = curbasic.groupby('industry').apply(_industry_indicator, time=times[i_].strftime('%Y%m%d'), curdaily=curdaily, ast=ast, profit=profit, cash=cash)
+        industry = curbasic.groupby('industry').apply(_industry_indicator, time=times[i_].strftime('%Y%m%d'), curdaily=curdaily, ast=ast, profit=profit, cash=cash,fina=fina)
 
         print(" Get industry daily from tushare,reports count is %d" % len(industry))
         if not industry.empty:

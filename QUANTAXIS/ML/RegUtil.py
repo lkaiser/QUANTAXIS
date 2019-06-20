@@ -151,7 +151,7 @@ def regress_xy_polynomial(x, y, poly=1, zoom=False, show=False):
 
     polynomial = np.polynomial.Chebyshev.fit(x, y, poly)
     #print(polynomial)
-    print(polynomial.degree())
+    #print(polynomial.degree())
     p2 = polynomial.deriv(m=1)
     #print(p2(x))
     # noinspection PyCallingNonCallable
@@ -318,7 +318,7 @@ def valid_poly(y, poly=1, zoom=False, show=True, metrics_func=metrics_rmse):
     return valid
 
 
-def least_valid_poly(y, zoom=False, show=True, metrics_func=metrics_rmse):
+def     least_valid_poly(y, zoom=False, show=True, metrics_func=metrics_rmse):
     """
     套接valid_poly，检测至少poly次拟合曲线可以代表原始曲线y的走势
     :param y: 原始可迭代序列
