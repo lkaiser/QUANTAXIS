@@ -5,6 +5,7 @@ import pandas as pd
 import numpy as np
 import datetime
 import os
+from QUANTAXIS.ML import RegUtil
 #pd.set_option('display.float_format', lambda x: '%.3f' % x)
 #pd.set_option('display.max_columns',5, 'display.max_rows', 100)
 class simpleValued:
@@ -85,7 +86,7 @@ class simpleValued:
 
         def _indicatorCp(data):
             fin = self.finacial[self.finacial.ts_code==data.name]
-            ast = self.asset.loc[self.asset.ts_code==data.name]
+            #ast = self.asset.loc[self.asset.ts_code==data.name]
             for i in range(0, fin.shape[0]):
                 if i+1 < fin.shape[0]:
                     query = (data.trade_date >= fin.iloc[i].ann_date) & (data.trade_date < fin.iloc[i + 1].ann_date)
@@ -218,19 +219,26 @@ class simpleValued:
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
 
 
-    def industry_trend(self,data):
-        self.industry = QA.QA_fetch_stock_block_adv()
-        finace = pd.merge(self.income, self.asset, left_on='code', right_on='code', how="inner")
-        stock = pd.merge(data,finace,left_on='code', right_on='code', how="left")
-        #
+    def industry_trend_top10(self,data):
+        industry_daily = pro.QA_fetch_get_finindicator(start=self.start-3, end=self.end)
+
+
         def _trend(data):
             '''
             行业趋势 计算总市值,流通市值,总扣非盈利,总净资产,总资产,总成交量,
             :param data:
             :return:
             '''
-
+            fit, p2 = RegUtil.regress_y_polynomial(data.q_gr_ttm, poly=3, show=True)
+            fit, p2 = RegUtil.regress_y_polynomial(data.q_profit_ttm, poly=3, show=True)
+            fit, p2 = RegUtil.regress_y_polynomial(data.q_dtprofit_ttm, poly=3, show=True)
+            fit, p2 = RegUtil.regress_y_polynomial(data.q_opincome_ttm, poly=3, show=True)
+            roe = data.q_dtprofit_ttm/data.total_hldr_eqy_exc_min_int
             pass
+        industry_daily = industry_daily.groupby("industry").apply(_trend)
+        df = pd.merge(data, self.stock.loc[:, ['ts_code', 'industry']], left_on='ts_code', right_on='ts_code', how="inner")  # 剔除缺少行业的
+        df = pd.merge(df, industry_daily, left_on=['industry', 'trade_date'], right_on=['industry', 'date'], how="inner")  # 剔除行业样本太少的
+
 
 
 

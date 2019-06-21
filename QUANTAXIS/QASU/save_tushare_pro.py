@@ -29,6 +29,7 @@ import re
 import time
 import pandas as pd
 from QUANTAXIS.QAUtil.QADate import QA_util_today_str
+from QUANTAXIS.ML import RegUtil
 import numpy as np
 
 import array
@@ -52,7 +53,7 @@ from QUANTAXIS.QAUtil.QASetting import DATABASE
 
 
 import tushare as ts
-ts.set_token('0f7da64f6c87dfa58456e0ad4c7ccf31d6c6e89458dc5b575e028c64')
+ts.set_token('336338dd7818a35bcf3e313c120ec8e36328cdfd2df0ea820a534bb4')
 
 def QA_SU_save_stock_terminated(client=DATABASE):
     '''
@@ -979,6 +980,7 @@ equity_yoy	float	净资产同比增长率
         return
     report_income = client.stock_report_finindicator_tushare
     print("##################get fina_indicator reports start####################")
+    fields = 'ts_code,ann_date,end_date,eps,dt_eps,total_revenue_ps,revenue_ps,capital_rese_ps,surplus_rese_ps,undist_profit_ps,extra_item,profit_dedt,gross_margin,current_ratio,quick_ratio,cash_ratio,invturn_days,arturn_days,inv_turn,ar_turn,ca_turn,fa_turn,assets_turn,op_income,valuechange_income,interst_income,daa,ebit,ebitda,fcff,fcfe,current_exint,noncurrent_exint,interestdebt,netdebt,tangible_asset,working_capital,networking_capital,invest_capital,retained_earnings,diluted2_eps,bps,ocfps,retainedps,cfps,ebit_ps,fcff_ps,fcfe_ps,netprofit_margin,grossprofit_margin,cogs_of_sales,expense_of_sales,profit_to_gr,saleexp_to_gr,adminexp_of_gr,finaexp_of_gr,impai_ttm,gc_of_gr,op_of_gr,ebit_of_gr,roe,roe_waa,roe_dt,roa,npta,roic,roe_yearly,roa2_yearly,roe_avg,opincome_of_ebt,investincome_of_ebt,n_op_profit_of_ebt,tax_to_ebt,dtprofit_to_profit,salescash_to_or,ocf_to_or,ocf_to_opincome,capitalized_to_da,debt_to_assets,assets_to_eqt,dp_assets_to_eqt,ca_to_assets,nca_to_assets,tbassets_to_totalassets,int_to_talcap,eqt_to_talcapital,currentdebt_to_debt,longdeb_to_debt,ocf_to_shortdebt,debt_to_eqt,eqt_to_debt,eqt_to_interestdebt,tangibleasset_to_debt,tangasset_to_intdebt,tangibleasset_to_netdebt,ocf_to_debt,ocf_to_interestdebt,ocf_to_netdebt,ebit_to_interest,longdebt_to_workingcapital,ebitda_to_debt,turn_days,roa_yearly,roa_dp,fixed_assets,profit_prefin_exp,non_op_profit,op_to_ebt,nop_to_ebt,ocf_to_profit,cash_to_liqdebt,cash_to_liqdebt_withinterest,op_to_liqdebt,op_to_debt,roic_yearly,profit_to_op,q_opincome,q_investincome,q_dtprofit,q_eps,q_netprofit_margin,q_gsprofit_margin,q_exp_to_sales,q_profit_to_gr,q_saleexp_to_gr,q_adminexp_to_gr,q_finaexp_to_gr,q_impair_to_gr_ttm,q_gc_to_gr,q_op_to_gr,q_roe,q_dt_roe,q_npta,q_opincome_to_ebt,q_investincome_to_ebt,q_dtprofit_to_profit,q_salescash_to_or,q_ocf_to_sales,q_ocf_to_or,basic_eps_yoy,dt_eps_yoy,cfps_yoy,op_yoy,ebt_yoy,netprofit_yoy,dt_netprofit_yoy,ocf_yoy,roe_yoy,bps_yoy,assets_yoy,eqt_yoy,tr_yoy,or_yoy,q_gr_yoy,q_gr_qoq,q_sales_yoy,q_sales_qoq,q_op_yoy,q_op_qoq,q_profit_yoy,q_profit_qoq,q_netprofit_yoy,q_netprofit_qoq,equity_yoy,rd_exp'
     for i_ in range(ind,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
@@ -987,11 +989,18 @@ equity_yoy	float	净资产同比增长率
         print('UPDATE stock fina_indicator Trying updating %s' % (df.iloc[i_].ts_code))
         time.sleep(1)
         try:
-            income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code)
+            income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code,fields=fields)
         except Exception as e:
             print(e)
             time.sleep(30)
-            income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code)
+            income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code,fields=fields)
+            income['q_dtprofit'].fillna(method='bfill', inplace=True)
+            income.loc[:, 'q_profit'] = income['q_dtprofit'] / income['q_dtprofit_to_profit']  # 单季度净利润
+            income.loc[:, 'q_gr'] = income.loc[:, 'q_profit'] / income['q_profit_to_gr']  # 单季度营业总收入
+            income.loc[:, 'profit_ttm'] = income.loc[:, 'q_profit'].rolling(window=4, min_periods=1).mean()
+            income.loc[:, 'gr_ttm'] = income.loc[:, 'q_gr'].rolling(window=4, min_periods=1).mean()
+            income.loc[:, 'q_opincome_ttm'] = income.loc[:, 'q_opincome'].rolling(window=4, min_periods=1).mean()  # 经营活动单季度净收益
+            income.loc[:, 'q_dtprofit_ttm'] = income.loc[:, 'q_dtprofit'].rolling(window=4, min_periods=1).mean()  # 扣非单季度净利润
         finally:
             pass
         print(" Get stock fina_indicator reports from tushare,reports count is %d" % len(income))
@@ -1206,19 +1215,33 @@ adj_factor	float	复权因子
             report_income.insert_many(json_data)
         print(" Save data to stock_daily_adj_tushare collection， OK")
 
-def QA_SU_save_single_season_indicator(start_day='20010101',ind=0,client=DATABASE,force=False):
-    '''
-    计算所有单季度数据
-    :param start_day:
-    :param client:
-    :param force:
-    :return:
-    '''
-    pro = ts.pro_api()
-    df = pro.stock_basic()
-    now = datetime.datetime.now().strftime('%Y%m%d')
-    for i_ in range(ind, len(df.index)):
-        income = QA_fetch_get_income(start_day,now).sort_values(by=['ann_date', 'end_date']).sort_values(by=['ann_date','end_date'])
+# def QA_SU_save_single_season_indicator(start_day='20010101',ind=0,client=DATABASE,force=False):
+#     '''
+#     计算所有单季度数据
+#     :param start_day:
+#     :param client:
+#     :param force:
+#     :return:
+#     '''
+#     pro = ts.pro_api()
+#     df = pro.stock_basic()
+#     now = datetime.datetime.now().strftime('%Y%m%d')
+#     db  = client.stock_report_finindicator_tushare
+#     for i_ in range(len(df.index)):
+#         fina = QA_fetch_get_dailyindicator(start_day, now,df.iloc[i_].ts_code).sort_values(by=['ann_date', 'end_date']).sort_values(by=['ann_date', 'end_date'])
+#         fina['q_dtprofit'].fillna(method='bfill', inplace=True)
+#         fina.loc[:,'q_profit'] = fina['q_dtprofit']/fina['q_dtprofit_to_profit'] #单季度净利润
+#         fina.loc[:,'q_gr'] = fina.loc[:,'q_profit']/fina['q_profit_to_gr'] #单季度营业总收入
+#         fina.loc[:,'profit_ttm'] = fina.loc[:,'q_profit'].rolling(window=4,min_periods=1).mean()
+#         fina.loc[:, 'gr_ttm'] = fina.loc[:,'q_gr'].rolling(window=4,min_periods=1).mean()
+#         fina.loc[:, 'q_opincome_ttm'] = fina.loc[:,'q_opincome'].rolling(window=4,min_periods=1).mean() # 经营活动单季度净收益
+#         fina.loc[:, 'q_dtprofit_ttm'] = fina.loc[:,'q_dtprofit'].rolling(window=4,min_periods=1).mean() #扣非单季度净利润
+#         db.remove({'ts_code': df.iloc[i_].ts_code})
+#         json_data = QA_util_to_json_from_pandas(fina)
+#         db.insert_many(json_data)
+
+
+
         #for()
 
 
@@ -1319,43 +1342,43 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
                 :return:
                 '''
 
-                ind_deal_mv = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()  # 当日有成交的总金额/当日股票市值占比 =估算的行业成交净额（有日行情的个股）
-                ind_total_mv = data.total_mv.sum() / data.total_mv_rate.sum()  # 估算行业总市值（有日行情的个股）
+                dic = {}
+                dic.ind_deal_mv = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()  # 当日有成交的总金额/当日股票市值占比 =估算的行业成交净额（有日行情的个股）
+                dic.ind_total_mv = data.total_mv.sum() / data.total_mv_rate.sum()  # 估算行业总市值（有日行情的个股）
 
                 df = data.dropna(subset = ["total_share", "total_revenue","net_profit","total_revenue_ps"]) #drop掉ast、profit、cash、fina任意为空的
 
-                ind_deal_mv_p = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()
-                ind_total_mv_p = data.total_mv.sum() / data.total_mv_rate.sum()
-                total_revenue = data.total_revenue.sum() #总收入
-                revenue = data.revenue.sum() #营业收入
-                total_cogs = data.total_cogs.sum()#总成本
-                operate_profit = data.operate_profit.sum()#营业利润
-                n_income = data.n_income.sum()  # 净利润(含少数股东损益)
-                n_income_attr_p = data.n_income_attr_p.sum()  # 净利润(含少数股东损益)
-                profit_dedt = data.profit_dedt.sum() #扣非净利润
-                gross_margin = data.gross_margin.sum() #毛利
-                op_income = data.op_income.sum() #经营活动净收益
-                q_opincome = data.q_opincome.sum() #单季度经营活动净收益
-                q_dtprofit = data.q_dtprofit.sum() #扣除非经常损益后的单季度净利润
-                inventories = data.inventories.sum() #存货
-                notes_receiv = data.notes_receiv.sum() #应收票据
-                accounts_receiv = data.accounts_receiv.sum() #应收账款
-                notes_payable = data.notes_payable.sum() #应付票据
-                acct_payable = data.acct_payable.sum() #应付账款
-                money_cap = data.money_cap.sum() #货币资金
-                fix_assets = data.fix_assets.sum() #固定资产
-                cip = data.cip.sum() #在建
-                r_and_d = data.data.r_and_d.sum() #研发支出
-                goodwill = data.goodwill.sum() #商誉
-                total_cur_assets = data.total_cur_assets.sum() #流动资产
-                total_cur_liab = data.total_cur_liab.sum() #流动负债
-                total_hldr_eqy_exc_min_int = data.total_hldr_eqy_exc_min_int.sum() #权益，不含少数股东
-                n_cashflow_act = data.n_cashflow_act.sum() #经营活动现金流净额
-                n_cashflow_inv_act = data.n_cashflow_inv_act.sum() #投资活动现金流净额
-                free_cashflow = data.free_cashflow.sum() #自由现金流净额
-                n_cash_flows_fnc_act = data.n_cash_flows_fnc_act.sum() #筹资现金流净额
+                dic.ind_deal_mv_p = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()
+                dic.ind_total_mv_p = data.total_mv.sum() / data.total_mv_rate.sum()
+                dic.q_gr_ttm = data.q_gr_ttm.sum() #营业收入
+                #total_cogs = data.total_cogs.sum()#总成本
+                #operate_profit = data.operate_profit.sum()#营业利润
+                dic.q_profit_ttm = data.q_profit_ttm.sum()  # 净利润(含少数股东损益)
+                #dic.q_profit_ttm_deg = RegUtil.calc_regress_polynomial_deg(dic.q_profit_ttm)
+                dic.q_dtprofit_ttm = data.q_dtprofit_ttm.sum()  # 净利润(扣非)
+                #gross_margin = data.gross_margin.sum() #毛利
+                dic.q_opincome_ttm = data.q_opincome_ttm.sum() #经营活动净收益
+                #q_opincome = data.q_opincome.sum() #单季度经营活动净收益
+                dic.inventories = data.inventories.sum() #存货
+                dic.notes_receiv = data.notes_receiv.sum() #应收票据
+                dic.accounts_receiv = data.accounts_receiv.sum() #应收账款
+                dic.notes_payable = data.notes_payable.sum() #应付票据
+                dic.acct_payable = data.acct_payable.sum() #应付账款
+                dic.money_cap = data.money_cap.sum() #货币资金
+                dic.fix_assets = data.fix_assets.sum() #固定资产
+                dic.cip = data.cip.sum() #在建
+                #r_and_d = data.data.r_and_d.sum() #研发支出
+                dic.goodwill = data.goodwill.sum() #商誉
+                dic.total_cur_assets = data.total_cur_assets.sum() #流动资产
+                dic.total_cur_liab = data.total_cur_liab.sum() #流动负债
+                dic.total_hldr_eqy_exc_min_int = data.total_hldr_eqy_exc_min_int.sum() #权益，不含少数股东
+                #n_cashflow_act = data.n_cashflow_act.sum() #经营活动现金流净额
+                #n_cashflow_inv_act = data.n_cashflow_inv_act.sum() #投资活动现金流净额
+                #free_cashflow = data.free_cashflow.sum() #自由现金流净额
+                #n_cash_flows_fnc_act = data.n_cash_flows_fnc_act.sum() #筹资现金流净额
 
-                return pd.DataFrame({"industry":industry,"date":data.name,"ind_deal_mv":ind_deal_mv,"ind_total_mv":ind_total_mv,"n_income":n_income,"n_income_attr_p":n_income_attr_p},index=[0])
+
+                return pd.DataFrame(dic,index=[0])
             return df.groupby('trade_date', as_index=False).apply(_indicator_caculate,industry=data.name)
 
         #print(times[i_])
@@ -1382,11 +1405,11 @@ if __name__ == '__main__':
     #print(pd.date_range('20190101',periods=2, freq='1d').strftime('%Y%m%d').values[-1])
     #DATABASE.stock_daily_basic_tushare.remove()
 
-    QA_SU_save_stock_daily_basic(start_day='20190101')
-    QA_SU_save_stock_report_fina_indicator(start_day='20190101')
-    QA_SU_save_stock_report_assetliability(start_day='20190101')
-    QA_SU_save_stock_report_income(start_day='20190101')
-    QA_SU_save_stock_report_cashflow(start_day='20190101')
+    # QA_SU_save_stock_daily_basic(start_day='20190101')
+    QA_SU_save_stock_report_fina_indicator(start_day='20010101',ind=2150)
+    # QA_SU_save_stock_report_assetliability(start_day='20190101')
+    # QA_SU_save_stock_report_income(start_day='20190101')
+    # QA_SU_save_stock_report_cashflow(start_day='20190101')
 
 
     #QA_SU_save_industry_indicator(start_day='20010101')

@@ -34,7 +34,7 @@ def plt_show():
         1. 上文figsize设置ABuEnv中的全局g_plt_figsize
         2. 下文显示调用plt.show()
     """
-    plt.figure(figsize=(14, 7))
+    plt.figure(figsize=(10, 5))
     yield
     plt.show()
 
@@ -394,24 +394,34 @@ def search_best_poly(y, poly_min=1, poly_max=100, zoom=False, show=True, metrics
     return poly
 if __name__ == '__main__':
     y = np.array([20,20.5,20.9,21,21.2,21.5,21.3,22,22.5,22.3,22,21.5,22,22.5,23,23.5,24,24.5,25,26,28,30,33])
+    #print(np.random.standard_normal(10))
+    y = np.random.standard_normal(20)+10
+    y = np.array([ 9.85117381, 10.72626557 , 8.43155657, 11.15086534 , 9.03065001 , 9.07568705, 8.36546068, 10.02270443 , 9.40985798, 10.76695561,  9.84519075,  8.30178377,9.85228656, 10.07154677, 11.67108459, 10.3206454 , 10.92511919,  8.4389314,10.9409673, 9.44037249])
+    #y = y[5:]
+    #print(y)
+    y = y[8:]
     x = np.arange(0, len(y))
     x = np.array(x).reshape([len(y), 1])
+
     #print(x)
-    t = regress_y_polynomial(y, poly=3,show=True)
-    poly_reg = PolynomialFeatures(degree=3)
-    X_ploy = poly_reg.fit_transform(x)
-    lin_reg_2 = linear_model.LinearRegression()
-    lin_reg_2.fit(X_ploy, y)
-    # 查看回归方程系数
-    print('Cofficients:', lin_reg_2.coef_)
-    # 查看回归方程截距
-    print('intercept', lin_reg_2.intercept_)
-    X = np.arange(0, len(y)).reshape([-1, 1])
-    plt.scatter(x, y, color='red')
-    plt.plot(x, lin_reg_2.predict(poly_reg.fit_transform(X)), color='blue')
-    plt.xlabel('Area')
-    plt.ylabel('Price')
-    plt.show()
+    fit, p2 = regress_y_polynomial(y, poly=3,show=True)
+    print(fit)
+    #print(p2)
+    print(p2(np.arange(0, len(y))))
+    # poly_reg = PolynomialFeatures(degree=3)
+    # X_ploy = poly_reg.fit_transform(x)
+    # lin_reg_2 = linear_model.LinearRegression()
+    # lin_reg_2.fit(X_ploy, y)
+    # # 查看回归方程系数
+    # print('Cofficients:', lin_reg_2.coef_)
+    # # 查看回归方程截距
+    # print('intercept', lin_reg_2.intercept_)
+    # X = np.arange(0, len(y)).reshape([-1, 1])
+    # plt.scatter(x, y, color='red')
+    # plt.plot(x, lin_reg_2.predict(poly_reg.fit_transform(X)), color='blue')
+    # plt.xlabel('Area')
+    # plt.ylabel('Price')
+    # plt.show()
 
     # print(t)
     # pass
