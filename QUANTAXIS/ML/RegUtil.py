@@ -394,12 +394,14 @@ def search_best_poly(y, poly_min=1, poly_max=100, zoom=False, show=True, metrics
     return poly
 if __name__ == '__main__':
     y = np.array([20,20.5,20.9,21,21.2,21.5,21.3,22,22.5,22.3,22,21.5,22,22.5,23,23.5,24,24.5,25,26,28,30,33])
+    #print([1]*100)
     #print(np.random.standard_normal(10))
     y = np.random.standard_normal(20)+10
     y = np.array([ 9.85117381, 10.72626557 , 8.43155657, 11.15086534 , 9.03065001 , 9.07568705, 8.36546068, 10.02270443 , 9.40985798, 10.76695561,  9.84519075,  8.30178377,9.85228656, 10.07154677, 11.67108459, 10.3206454 , 10.92511919,  8.4389314,10.9409673, 9.44037249])
     #y = y[5:]
     #print(y)
-    y = y[8:]
+    #y = y[8:]
+    y = np.append([9.9]*200, y)
     x = np.arange(0, len(y))
     x = np.array(x).reshape([len(y), 1])
 

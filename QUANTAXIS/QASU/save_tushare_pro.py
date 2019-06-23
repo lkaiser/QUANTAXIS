@@ -1267,10 +1267,12 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
             end_halfyear_af = (datetime.datetime.now()+pd.Timedelta(180, unit='D')).strftime('%Y%m%d')
         else:
             end = times[i_ + 1].strftime('%Y%m%d')
-            end_halfyear_af = (times[i_] + pd.Timedelta(180, unit='D')).strftime('%Y%m%d')
+            end_halfyear_af = (times[i_] + pd.Timedelta(215, unit='D')).strftime('%Y%m%d')
+        ds = pd.date_range(start_halfyear_bf,end_halfyear_af,freq='Q-DEC').strftime('%Y%m%d')
+
         curdaily = QA_fetch_get_dailyindicator(times[i_].strftime('%Y%m%d'),end).sort_values(by=['trade_date'])# daily_basic.find({"trade_date": {"$gte": times[i_].strftime('%Y%m%d'), "$lt": end}})
         start_2years_bf = (times[i_] - pd.Timedelta(730, unit='D')).strftime('%Y%m%d')
-        start_halfyear_bf = (times[i_] - pd.Timedelta(180, unit='D')).strftime('%Y%m%d')
+        start_halfyear_bf = (times[i_] - pd.Timedelta(215, unit='D')).strftime('%Y%m%d')
         curbasic = basic[(basic.list_date < start_2years_bf)] #basic.list_status == 'D' 去掉了,考虑到list_status不是对历史状态的描述
 
         #先按ann_date，再按end_date排序，比如年报和1季报同日公布,此时还是需要排个序的
@@ -1279,7 +1281,7 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
         cash = QA_fetch_get_cashflow(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
         fina = QA_fetch_get_dailyindicator(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
 
-        def _industry_indicator(data, time, curdaily, ast, profit, cash,fina):
+        def _industry_indicator(data, time, curdaily,seasons, ast, profit, cash,fina):
             df = pd.merge(data, curdaily, on='ts_code')  # 内联，可剔除整个计算周期内无交易的code
             first = df.groupby('ts_code', as_index=False).head(1)  # 各个code取第一条有交易数据
             in_index = client.index_compose #指数组成信息
@@ -1289,20 +1291,37 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
             uplimit = first.total_mv.describe(percentiles=[.9])[5]
             # first = first.sort_values(by=['total_mv'], ascending=False)
             first = first[first.total_mv < uplimit].nlargest(10, 'total_mv')  # 取市值前10
-            index_json = {"name": data.name, "time": time, " compose": first.ts_code.values.tolist(), "init_time": first.trade_date.values.tolist(), "total": len(first), "scare": first.total_mv.sum(),'update_time':datetime.datetime.now()}
+            #index_json = {"name": data.name, "time": time, " compose": first.ts_code.values.tolist(), "init_time": first.trade_date.values.tolist(), "total": len(first), "scare": first.total_mv.sum(),'update_time':datetime.datetime.now()}
 
+
+            # first.loc[:, 'total_mv_rate'] = first.total_mv / (first.total_mv.sum())
+            # first.loc[:, 'deal_mv_rate'] = first.turnover_rate_f * first.close / ((first.turnover_rate_f * first.close).sum())  # TODO 考虑改进一下，用sma5来计算
+
+
+            #df = pd.merge(df,first.loc[:,['ts_code','deal_mv_rate','total_mv_rate']],on=['ts_code'],how='left')
+            ast = ast[ast.ts_code.isin(first.ts_code.values)]               #限定资产负债表、利润表、现金流表只包含first所含股票
+            # profit = profit[profit.ts_code.isin(first.ts_code.values)]
+            # cash = cash[cash.ts_code.isin(first.ts_code.values)]
+            fina = fina[fina.ts_code.isin(first.ts_code.values)]
+
+            if len(ast.ts_code.unique().values) < len(first):
+                first = first[first.ts_code.isin(ast.ts_code.unique().values)]
+            index_json = {"name": data.name, "time": time, " compose": first.ts_code.values.tolist(),"init_time": first.trade_date.values.tolist(), "total": len(first),"scare": first.total_mv.sum(), 'update_time': datetime.datetime.now()}
             if  len(first)<3: #小于3只，没必要做指数了
                 return None
-
             in_index.insert_one(index_json)  # 保存每期指数构成成分，半年更新一次指数构成
-            first.loc[:, 'total_mv_rate'] = first.total_mv / (first.total_mv.sum())
-            first.loc[:, 'deal_mv_rate'] = first.turnover_rate_f * first.close / ((first.turnover_rate_f * first.close).sum())  # TODO 考虑改进一下，用sma5来计算
             df = df[df.ts_code.isin(first.ts_code.values)]  # 取总市值前十的股票构成该行业指数
 
+            def _report_fill(data,seasons):
+                df = pd.merge(data,seasons,on='end_date',how='outer')
+                df[['inventories','notes_receiv','accounts_receiv','notes_payable']].fillna(method='bfill', inplace=True)
+                #TODO 还需要填充end_date，及ann_date这个只能用season
+                return df
+            #seasons =
+            ast = ast.groupby('ts_code').apply(_report_fill,seasons)
+            fina = fina.groupby('ts_code').apply(_report_fill,seasons)
+            # TODO ast  fina merge 取 ann_date最小者
 
-
-            df = pd.merge(df,first.loc[:,['ts_code','deal_mv_rate','total_mv_rate']],on=['ts_code'],how='left')
-            ast = ast[ast.ts_code.isin(first.ts_code.values)]
 
             def _season(data, ast):
                 curast = ast[ast.ts_code == data.name]
@@ -1328,12 +1347,6 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
                 return None
 
 
-            df = pd.merge(df, ast, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
-            df = pd.merge(df, profit, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
-            df = pd.merge(df, cash, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
-            df = pd.merge(df, fina, left_on=['ts_code', 'season'], right_on=['ts_code', 'end_date'], how='left')
-            #df.dropna
-
             def _indicator_caculate(data,industry):
                 '''
                 行业趋势 计算总市值,流通市值,总扣非盈利,总净资产,总资产,总成交量,及趋势（一阶导数）等因子计算
@@ -1347,6 +1360,8 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
                 dic.ind_total_mv = data.total_mv.sum() / data.total_mv_rate.sum()  # 估算行业总市值（有日行情的个股）
 
                 df = data.dropna(subset = ["total_share", "total_revenue","net_profit","total_revenue_ps"]) #drop掉ast、profit、cash、fina任意为空的
+
+
 
                 dic.ind_deal_mv_p = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()
                 dic.ind_total_mv_p = data.total_mv.sum() / data.total_mv_rate.sum()
@@ -1406,14 +1421,14 @@ if __name__ == '__main__':
     #DATABASE.stock_daily_basic_tushare.remove()
 
     # QA_SU_save_stock_daily_basic(start_day='20190101')
-    QA_SU_save_stock_report_fina_indicator(start_day='20010101',ind=2150)
+    #QA_SU_save_stock_report_fina_indicator(start_day='20010101',ind=2150)
     # QA_SU_save_stock_report_assetliability(start_day='20190101')
     # QA_SU_save_stock_report_income(start_day='20190101')
     # QA_SU_save_stock_report_cashflow(start_day='20190101')
 
 
     #QA_SU_save_industry_indicator(start_day='20010101')
-
+    print(pd.date_range('20170331','20171231',freq='Q-DEC').strftime('%Y%m%d'))
     result = []
     # def when_done(r):
     #     """ProcessPoolExecutor每一个进程结束后结果append到result中"""
