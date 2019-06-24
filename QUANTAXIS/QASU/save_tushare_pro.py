@@ -1390,10 +1390,10 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
 
 
 
-                fit, p2 = RegUtil.regress_y_polynomial(primary.q_gr_ttm, poly=3, show=True)
-                fit, p2 = RegUtil.regress_y_polynomial(primary.q_profit_ttm, poly=3, show=True)
-                fit, p2 = RegUtil.regress_y_polynomial(primary.q_dtprofit_ttm, poly=3, show=True)
-                fit, p2 = RegUtil.regress_y_polynomial(primary.q_opincome_ttm, poly=3, show=True)
+                # fit, p2 = RegUtil.regress_y_polynomial(primary.q_gr_ttm, poly=3, show=True)
+                # fit, p2 = RegUtil.regress_y_polynomial(primary.q_profit_ttm, poly=3, show=True)
+                # fit, p2 = RegUtil.regress_y_polynomial(primary.q_dtprofit_ttm, poly=3, show=True)
+                # fit, p2 = RegUtil.regress_y_polynomial(primary.q_opincome_ttm, poly=3, show=True)
 
                 curprimary = primary[primary.ann_date<=data.name].groupby('ts_code').tail(1)
                 dic = dic.update(curprimary.sum().to_dict())

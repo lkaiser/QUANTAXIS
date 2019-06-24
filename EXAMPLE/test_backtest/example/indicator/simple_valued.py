@@ -230,24 +230,27 @@ class simpleValued:
             :return:
             '''
             df = data[data.trade_date>=self.start]
-            dates = [str(int(data.name[0:4]) - 2) + '0430', str(int(data.name[0:4]) - 2) + '0830', str(int(data.name[0:4]) - 2) + '1031', str(int(data.name[0:4]) - 1) + '0430', str(int(data.name[0:4]) - 1) + '0830', str(int(data.name[0:4]) - 1) + '1031']
-            if data.name[4:8] < "0431":
-                dates.append(data.name)
-            if data.name[4:8] < "0830" and data.name[4:8] > "0430":
-                dates.append([data.name[0:4] + '0430', data.name])
-            if data.name[4:8] < "1231" and data.name[4:8] > "0830":
-                dates.append([data.name[0:4] + '0430', data.name[0:4] + '0830', data.name])
-            dates.apply()
+
             for item in df:
                 #roe 趋势计算 TODO 季报公布期间，逐日计算,1.01-4.30 取 10.30,8.30,4.30,连续2年   10.01-10.30 取 8.30,4.30 ..连续两年
                 #TODO 非季报公布期间,继承最新deg即可
             # roe 、总资产、净利润、货币资金、存货、净资产类同处理
-            fit, p2 = RegUtil.regress_y_polynomial(data.q_gr_ttm, poly=3, show=True)
-            fit, p2 = RegUtil.regress_y_polynomial(data.q_profit_ttm, poly=3, show=True)
-            fit, p2 = RegUtil.regress_y_polynomial(data.q_dtprofit_ttm, poly=3, show=True)
-            fit, p2 = RegUtil.regress_y_polynomial(data.q_opincome_ttm, poly=3, show=True)
-            roe = data.q_dtprofit_ttm/data.total_hldr_eqy_exc_min_int
-            pass
+                dates = [str(int(item.trade_date[0:4]) - 2) + '0430', str(int(item.trade_date[0:4]) - 2) + '0830',
+                         str(int(item.trade_date[0:4]) - 2) + '1031', str(int(item.trade_date[0:4]) - 1) + '0430',
+                         str(int(item.trade_date[0:4]) - 1) + '0830', str(int(item.trade_date[0:4]) - 1) + '1031']
+                if item.trade_date[4:8] < "0431":
+                    dates.append(item.trade_date)
+                if item.trade_date[4:8] < "0830" and item.trade_date[4:8] > "0430":
+                    dates.append([item.trade_date[0:4] + '0430', item.trade_date])
+                if item.trade_date[4:8] < "1231" and item.trade_date[4:8] > "0830":
+                    dates.append([item.trade_date[0:4] + '0430', item.trade_date[0:4] + '0830', item.trade_date])
+                resampledf = dates.apply(lambda x, y: y[y.trade_date < x].tail(1), y=data)
+                fit, p2 = RegUtil.regress_y_polynomial(resampledf.q_gr_ttm, poly=3, show=True)
+                fit, p2 = RegUtil.regress_y_polynomial(resampledf.q_profit_ttm, poly=3, show=True)
+                fit, p2 = RegUtil.regress_y_polynomial(resampledf.q_dtprofit_ttm, poly=3, show=True)
+                fit, p2 = RegUtil.regress_y_polynomial(resampledf.q_opincome_ttm, poly=3, show=True)
+                roe = item.q_dtprofit_ttm / item.total_hldr_eqy_exc_min_int
+
         industry_daily = industry_daily.groupby("industry").apply(_trend)
         df = pd.merge(data, self.stock.loc[:, ['ts_code', 'industry']], left_on=['ts_code','trade_date'], right_on='ts_code', how="inner")  # 剔除缺少行业的
         df = pd.merge(df, industry_daily, left_on=['industry', 'trade_date'], right_on=['industry', 'date'], how="inner")  # 剔除行业样本太少的
