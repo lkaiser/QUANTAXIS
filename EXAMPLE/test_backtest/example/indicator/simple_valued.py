@@ -220,7 +220,7 @@ class simpleValued:
 
 
     def industry_trend_top10(self,data):
-        industry_daily = pro.QA_fetch_get_finindicator(start=self.start-3, end=self.end).(['ts_code','trade_date'], ascending = True)
+        industry_daily = pro.QA_fetch_get_finindicator(start=self.start-3, end=self.end).sort_values(['ts_code','trade_date'], ascending = True)
 
 
         def _trend(data):
@@ -230,6 +230,14 @@ class simpleValued:
             :return:
             '''
             df = data[data.trade_date>=self.start]
+            dates = [str(int(data.name[0:4]) - 2) + '0430', str(int(data.name[0:4]) - 2) + '0830', str(int(data.name[0:4]) - 2) + '1031', str(int(data.name[0:4]) - 1) + '0430', str(int(data.name[0:4]) - 1) + '0830', str(int(data.name[0:4]) - 1) + '1031']
+            if data.name[4:8] < "0431":
+                dates.append(data.name)
+            if data.name[4:8] < "0830" and data.name[4:8] > "0430":
+                dates.append([data.name[0:4] + '0430', data.name])
+            if data.name[4:8] < "1231" and data.name[4:8] > "0830":
+                dates.append([data.name[0:4] + '0430', data.name[0:4] + '0830', data.name])
+            dates.apply()
             for item in df:
                 #roe 趋势计算 TODO 季报公布期间，逐日计算,1.01-4.30 取 10.30,8.30,4.30,连续2年   10.01-10.30 取 8.30,4.30 ..连续两年
                 #TODO 非季报公布期间,继承最新deg即可

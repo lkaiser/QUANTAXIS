@@ -1268,7 +1268,7 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
         else:
             end = times[i_ + 1].strftime('%Y%m%d')
             end_halfyear_af = (times[i_] + pd.Timedelta(215, unit='D')).strftime('%Y%m%d')
-        ds = pd.date_range(start_halfyear_bf,end_halfyear_af,freq='Q-DEC').strftime('%Y%m%d')
+        seasons = pd.DataFrame(pd.date_range(start_halfyear_bf,end_halfyear_af,freq='Q-DEC').strftime('%Y%m%d'),columns=['end_date'])
 
         curdaily = QA_fetch_get_dailyindicator(times[i_].strftime('%Y%m%d'),end).sort_values(by=['trade_date'])# daily_basic.find({"trade_date": {"$gte": times[i_].strftime('%Y%m%d'), "$lt": end}})
         start_2years_bf = (times[i_] - pd.Timedelta(730, unit='D')).strftime('%Y%m%d')
@@ -1294,14 +1294,12 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
             #index_json = {"name": data.name, "time": time, " compose": first.ts_code.values.tolist(), "init_time": first.trade_date.values.tolist(), "total": len(first), "scare": first.total_mv.sum(),'update_time':datetime.datetime.now()}
 
 
-            # first.loc[:, 'total_mv_rate'] = first.total_mv / (first.total_mv.sum())
-            # first.loc[:, 'deal_mv_rate'] = first.turnover_rate_f * first.close / ((first.turnover_rate_f * first.close).sum())  # TODO 考虑改进一下，用sma5来计算
+            first.loc[:, 'total_mv_rate'] = first.total_mv / (first.total_mv.sum())
+            first.loc[:, 'deal_mv_rate'] = first.turnover_rate_f * first.close / ((first.turnover_rate_f * first.close).sum())  # TODO 考虑改进一下，用sma5来计算
 
 
-            #df = pd.merge(df,first.loc[:,['ts_code','deal_mv_rate','total_mv_rate']],on=['ts_code'],how='left')
+            df = pd.merge(df,first.loc[:,['ts_code','deal_mv_rate','total_mv_rate']],on=['ts_code'],how='left')
             ast = ast[ast.ts_code.isin(first.ts_code.values)]               #限定资产负债表、利润表、现金流表只包含first所含股票
-            # profit = profit[profit.ts_code.isin(first.ts_code.values)]
-            # cash = cash[cash.ts_code.isin(first.ts_code.values)]
             fina = fina[fina.ts_code.isin(first.ts_code.values)]
 
             if len(ast.ts_code.unique().values) < len(first):
@@ -1312,42 +1310,72 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
             in_index.insert_one(index_json)  # 保存每期指数构成成分，半年更新一次指数构成
             df = df[df.ts_code.isin(first.ts_code.values)]  # 取总市值前十的股票构成该行业指数
 
+            inicators = pd.merge(ast[['ts_code','end_date','ann_date','inventories','notes_receiv','accounts_receiv','notes_payable','acct_payable','money_cap','fix_assets','cip','goodwill','total_cur_assets','total_cur_liab','total_hldr_eqy_exc_min_int']], fina[['ts_code','end_date','ann_date','q_gr','q_profit','q_opincome','q_dtprofit']], on=['ts_code','end_date'], how='outer')
+            inicators.loc[:,'ann_date'] = np.where(~np.isnan(inicators.ann_date_x),inicators.ann_date_x,inicators.ann_date_y)# np.where不错，好用
+
             def _report_fill(data,seasons):
-                df = pd.merge(data,seasons,on='end_date',how='outer')
-                df[['inventories','notes_receiv','accounts_receiv','notes_payable']].fillna(method='bfill', inplace=True)
-                #TODO 还需要填充end_date，及ann_date这个只能用season
+                data.loc[:, 'status'] = '0'
+                df = pd.merge(data, seasons, on='end_date', how='outer')
+                df.loc[df.status.isnull(),'status'] = '1'
+                def _ann_date_ca(end_date):
+                    if end_date[4:8] == "0331":
+                        return end_date[0:4] + "0431"
+                    if end_date[4:8] == "0630":
+                        return end_date[0:4] + "0831"
+                    if end_date[4:8] == "0930":
+                        return end_date[0:4] + "1031"
+                    if end_date[4:8] == "1231":
+                        return str(int(end_date[0:4]) + 1) + "0431"
+                df.ann_date.fillna(lambda x: x.apply(_ann_date_ca), inplace=True)  # 木办法啊，手动设置季报最后一天为ann_date
+                # df.ts_code.fillna(method='pad',inplace=True).fillna(method='bfill',inplace=True) #前后向填充
+                # df.q_gr.fillna(method='pad',inplace=True).fillna(method='bfill',inplace=True) #前后向填充
+                # df.q_profit.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.q_opincome.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.q_dtprofit.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.inventories.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.notes_receiv.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.accounts_receiv.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.notes_payable.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.acct_payable.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.money_cap.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.fix_assets.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.cip.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.goodwill.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.total_cur_assets.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.total_cur_liab.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                # df.total_hldr_eqy_exc_min_int.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                df.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
                 return df
-            #seasons =
-            ast = ast.groupby('ts_code').apply(_report_fill,seasons)
-            fina = fina.groupby('ts_code').apply(_report_fill,seasons)
-            # TODO ast  fina merge 取 ann_date最小者
+
+            inicators = inicators.groupby('ts_code',as_index=False).apply(_report_fill,seasons)
 
 
-            def _season(data, ast):
-                curast = ast[ast.ts_code == data.name]
-                data.loc[:, 'season'] = None
-                for i_ in range(0, curast.shape[0]): #存在年报被忽略的可能性
-                #for index, item in enumerate(curast):
-                    judge = (data.trade_date >= curast.iloc[i_].ann_date)
-                    if i_ + 1 != curast.shape[0]:
-                        judge = judge & (data.trade_date < curast.iloc[i_ + 1].ann_date)
+            # def _season(data, ast):
+            #     curast = ast[ast.ts_code == data.name]
+            #     data.loc[:, 'season'] = None
+            #     for i_ in range(0, curast.shape[0]): #存在年报被忽略的可能性
+            #     #for index, item in enumerate(curast):
+            #         judge = (data.trade_date >= curast.iloc[i_].ann_date)
+            #         if i_ + 1 != curast.shape[0]:
+            #             judge = judge & (data.trade_date < curast.iloc[i_ + 1].ann_date)
+            #
+            #         data.loc[judge, 'season'] = curast.iloc[i_].end_date
+            #     if curast.shape[0]>0:
+            #         data.loc[data.season.isnull(), 'season'] = curast.iloc[0].end_date# 再有为空，只能是前面数据缺失了，用最近的补缺
+            #         return data
+            #     else :
+            #         return None
+            #     #return data
 
-                    data.loc[judge, 'season'] = curast.iloc[i_].end_date
-                if curast.shape[0]>0:
-                    data.loc[data.season.isnull(), 'season'] = curast.iloc[0].end_date# 再有为空，只能是前面数据缺失了，用最近的补缺
-                    return data
-                else :
-                    return None
-                #return data
+            #df = df.groupby('ts_code', as_index=False).apply(_season,ast=inicators)
+            #df = pd.merge(df,inicators,how='left')
+            #df = df.dropna(how='all')
 
-            df = df.groupby('ts_code', as_index=False).apply(_season,ast=ast)
-            df = df.dropna(how='all')
-
-            if not len(df): #存在全部财务数据丢失的可能，
-                return None
+            # if not len(df): #存在全部财务数据丢失的可能，
+            #     return None
 
 
-            def _indicator_caculate(data,industry):
+            def _indicator_caculate(data,industry,primary):
                 '''
                 行业趋势 计算总市值,流通市值,总扣非盈利,总净资产,总资产,总成交量,及趋势（一阶导数）等因子计算
                 :param data:
@@ -1356,51 +1384,47 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
                 '''
 
                 dic = {}
+
+
                 dic.ind_deal_mv = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()  # 当日有成交的总金额/当日股票市值占比 =估算的行业成交净额（有日行情的个股）
                 dic.ind_total_mv = data.total_mv.sum() / data.total_mv_rate.sum()  # 估算行业总市值（有日行情的个股）
 
-                df = data.dropna(subset = ["total_share", "total_revenue","net_profit","total_revenue_ps"]) #drop掉ast、profit、cash、fina任意为空的
 
 
+                fit, p2 = RegUtil.regress_y_polynomial(primary.q_gr_ttm, poly=3, show=True)
+                fit, p2 = RegUtil.regress_y_polynomial(primary.q_profit_ttm, poly=3, show=True)
+                fit, p2 = RegUtil.regress_y_polynomial(primary.q_dtprofit_ttm, poly=3, show=True)
+                fit, p2 = RegUtil.regress_y_polynomial(primary.q_opincome_ttm, poly=3, show=True)
 
-                dic.ind_deal_mv_p = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()
-                dic.ind_total_mv_p = data.total_mv.sum() / data.total_mv_rate.sum()
-                dic.q_gr_ttm = data.q_gr_ttm.sum() #营业收入
-                #total_cogs = data.total_cogs.sum()#总成本
-                #operate_profit = data.operate_profit.sum()#营业利润
-                dic.q_profit_ttm = data.q_profit_ttm.sum()  # 净利润(含少数股东损益)
-                #dic.q_profit_ttm_deg = RegUtil.calc_regress_polynomial_deg(dic.q_profit_ttm)
-                dic.q_dtprofit_ttm = data.q_dtprofit_ttm.sum()  # 净利润(扣非)
-                #gross_margin = data.gross_margin.sum() #毛利
-                dic.q_opincome_ttm = data.q_opincome_ttm.sum() #经营活动净收益
-                #q_opincome = data.q_opincome.sum() #单季度经营活动净收益
-                dic.inventories = data.inventories.sum() #存货
-                dic.notes_receiv = data.notes_receiv.sum() #应收票据
-                dic.accounts_receiv = data.accounts_receiv.sum() #应收账款
-                dic.notes_payable = data.notes_payable.sum() #应付票据
-                dic.acct_payable = data.acct_payable.sum() #应付账款
-                dic.money_cap = data.money_cap.sum() #货币资金
-                dic.fix_assets = data.fix_assets.sum() #固定资产
-                dic.cip = data.cip.sum() #在建
-                #r_and_d = data.data.r_and_d.sum() #研发支出
-                dic.goodwill = data.goodwill.sum() #商誉
-                dic.total_cur_assets = data.total_cur_assets.sum() #流动资产
-                dic.total_cur_liab = data.total_cur_liab.sum() #流动负债
-                dic.total_hldr_eqy_exc_min_int = data.total_hldr_eqy_exc_min_int.sum() #权益，不含少数股东
-                #n_cashflow_act = data.n_cashflow_act.sum() #经营活动现金流净额
-                #n_cashflow_inv_act = data.n_cashflow_inv_act.sum() #投资活动现金流净额
-                #free_cashflow = data.free_cashflow.sum() #自由现金流净额
-                #n_cash_flows_fnc_act = data.n_cash_flows_fnc_act.sum() #筹资现金流净额
+                curprimary = primary[primary.ann_date<=data.name].groupby('ts_code').tail(1)
+                dic = dic.update(curprimary.sum().to_dict())
+                # dic.q_gr_ttm = curprimary.q_gr_ttm.sum() #营业收入
+                # dic.q_profit_ttm = curprimary.q_profit_ttm.sum()  # 净利润(含少数股东损益)
+                # dic.q_dtprofit_ttm = curprimary.q_dtprofit_ttm.sum()  # 净利润(扣非)
+                # dic.q_opincome_ttm = curprimary.q_opincome_ttm.sum() #经营活动净收益
+                # dic.inventories = curprimary.inventories.sum() #存货
+                # dic.notes_receiv = curprimary.notes_receiv.sum() #应收票据
+                # dic.accounts_receiv = curprimary.accounts_receiv.sum() #应收账款
+                # dic.notes_payable = curprimary.notes_payable.sum() #应付票据
+                # dic.acct_payable = curprimary.acct_payable.sum() #应付账款
+                # dic.money_cap = curprimary.money_cap.sum() #货币资金
+                # dic.fix_assets = curprimary.fix_assets.sum() #固定资产
+                # dic.cip = curprimary.cip.sum() #在建
+                # dic.goodwill = curprimary.goodwill.sum() #商誉
+                # dic.total_cur_assets = curprimary.total_cur_assets.sum() #流动资产
+                # dic.total_cur_liab = curprimary.total_cur_liab.sum() #流动负债
+                # dic.total_hldr_eqy_exc_min_int = curprimary.total_hldr_eqy_exc_min_int.sum() #权益，不含少数股东
+
 
 
                 return pd.DataFrame(dic,index=[0])
-            return df.groupby('trade_date', as_index=False).apply(_indicator_caculate,industry=data.name)
+            return df.groupby('trade_date', as_index=False).apply(_indicator_caculate,industry=data.name,primary=inicators)
 
         #print(times[i_])
         #print(curdaily.loc[:,['trade_date','ts_code','close']].head(10))
         #print(len(curbasic))
         #print(curbasic[curbasic.industry==u'专用机械'].loc[:,['ts_code','symbol','industry','area']])
-        industry = curbasic.groupby('industry').apply(_industry_indicator, time=times[i_].strftime('%Y%m%d'), curdaily=curdaily, ast=ast, profit=profit, cash=cash,fina=fina)
+        industry = curbasic.groupby('industry').apply(_industry_indicator, time=times[i_].strftime('%Y%m%d'), curdaily=curdaily,seasons=seasons, ast=ast, profit=profit, cash=cash,fina=fina)
 
         print(" Get industry daily from tushare,reports count is %d" % len(industry))
         if not industry.empty:
