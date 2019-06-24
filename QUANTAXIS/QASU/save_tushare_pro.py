@@ -1385,7 +1385,6 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
 
                 dic = {}
 
-
                 dic.ind_deal_mv = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()  # 当日有成交的总金额/当日股票市值占比 =估算的行业成交净额（有日行情的个股）
                 dic.ind_total_mv = data.total_mv.sum() / data.total_mv_rate.sum()  # 估算行业总市值（有日行情的个股）
 
