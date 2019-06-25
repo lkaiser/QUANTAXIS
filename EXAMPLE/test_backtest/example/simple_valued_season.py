@@ -37,10 +37,12 @@ class simpleValuedSeason:
         #
         #DATA = pro.QA_SU_save_stock_daily(code, start, end)
         # todo 计算信号
-        # sv = simpleValued(start,end)
+        sv = simpleValued(start,end)
         # sv.indcators_prepare()
         # stock_signal = sv.non_finacal_top5_valued()
+        # sv.industry_trend_top10()
         # stock_signal.to_pickle('test.pkl')
+        stock_signal = sv.simpleStrategy()
         stock_signal = pd.read_pickle('test.pkl')
         #print(stock_signal.head())
         stock_signal.loc[:,'open'] = stock_signal.loc[:,'high'] = stock_signal.loc[:,'low'] = stock_signal['close']

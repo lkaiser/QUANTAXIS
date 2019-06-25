@@ -29,7 +29,7 @@ class simpleValued:
         self.industry = None
 
 
-    def indcators_prepare(self):
+    def indcators_prepare(self,basic):
         """
             简单价值判断，近1年 roe,近半年roe，近3年净资产增速，近2年净资产增速。价值法6年pb、7年pb
          """
@@ -108,40 +108,16 @@ class simpleValued:
 
         # 获取每日equity_pb6、roe_year_pb6
         if not (os.path.isfile(self.basic_temp_name)):
-            basic = self.basic
+            #basic = self.basic
             basic.loc[:, 'equity2_pb7'] = 0
             basic.loc[:, 'equity3_pb7'] = 0
             basic.loc[:, 'roe_year_pb7'] = 0
             basic.loc[:, 'roe_half_year_pb7'] = 0
             basic.loc[:, 'equity_rejust'] = 0
-            self.basic = basic.groupby('ts_code').apply(_indicatorCp)
-            self.basic.to_pickle(self.basic_temp_name)
+            basic.groupby('ts_code').apply(_indicatorCp)
+            basic.to_pickle(self.basic_temp_name)
 
-
-
-        #每日统计指标
-        def _dailystat(df):
-            #rs = []
-            non_finacial_codes = self.stock[(self.stock.industry != '银行') & (self.stock.industry != '保险')].ts_code.values
-            non_finacial = df[df.ts_code.isin(non_finacial_codes)]
-
-            non_finacial.loc[:,'equity2_pb7_pb'] = np.round(non_finacial.loc[:,'equity2_pb7']/non_finacial.loc[:,'pb'],3)
-            non_finacial.loc[:, 'equity3_pb7_pb'] = np.round(non_finacial.loc[:, 'equity3_pb7'] / non_finacial.loc[:, 'pb'],3)
-            non_finacial.loc[:, 'roe_half_year_pb7_pb'] = np.round(non_finacial.loc[:, 'roe_half_year_pb7'] / non_finacial.loc[:, 'pb'],3)
-            non_finacial.loc[:, 'roe_year_pb7_pb'] = np.round(non_finacial.loc[:, 'roe_year_pb7'] / non_finacial.loc[:, 'pb'],3)
-            # 太假的不要，干扰数据，净资产本季报之后发生变化>1.1的排除
-            non_finacial = non_finacial.loc[(non_finacial.equity2_pb7 < 11) & (non_finacial.equity_rejust < 1.1) & (non_finacial.roe_year_pb7_pb < 11)]
-            st = non_finacial.loc[:,['equity2_pb7_pb','equity3_pb7_pb','roe_half_year_pb7_pb','roe_year_pb7_pb']].describe([.25,.5,.75,.85,.95]).T.reset_index(level=0)
-            st.columns = ['category','cnt','mean','std','min','per25','per50','per75','per85','per95','max']
-            st.loc[:,'statype'] ='non_finacial'
-            st.index = [df.name]*4
-            #rs.append(st)
-            #return pd.concat(rs)
-            return st
-        #print(self.basic.loc[:,['equity_pb6','equity_pb7','roe_year_pb6','roe_year_pb7']].head())
-        #pass
-        self.dailymarket = self.basic.groupby('trade_date').apply(_dailystat)
-
+        return basic
 
     def non_finacal_top5_valued(self,data):
         """
@@ -153,8 +129,9 @@ class simpleValued:
         # td = basic.merge(dailymarket[['trade_date', 'equity_pb6top5', 'equity_pb7top5','roe_year_pb6top5','roe_year_pb7top5']], left_on='trade_date', right_on='trade_date', how='left').set_index(basic.index)
         # td
         non_finacial_codes = self.stock[(self.stock.industry != '银行') & (self.stock.industry != '保险')].ts_code.values
-        basic = self.basic[self.basic.ts_code.isin(non_finacial_codes)]
-
+        basic = data
+        if basic is None:
+            basic = self.basic[self.basic.ts_code.isin(non_finacial_codes)]
 
         def _trash_fiter(df):
             '''垃圾排除大法 剔除商誉过高、现金流不充裕，主营利润占比低、资产负债率过高、存货占比、应收占比'''
@@ -198,11 +175,38 @@ class simpleValued:
                 return data
         basic = basic.groupby('ts_code',as_index=False).apply(_trash_fiter)
 
+        basic = self.indcators_prepare(basic)
 
-        def _top5(df):
+        # 每日统计指标
+        def _dailystat(df):
+            # rs = []
+            # non_finacial_codes = self.stock[(self.stock.industry != '银行') & (self.stock.industry != '保险')].ts_code.values
+            # non_finacial = df[df.ts_code.isin(non_finacial_codes)]
+            non_finacial = df
+
+            non_finacial.loc[:, 'equity2_pb7_pb'] = np.round(non_finacial.loc[:, 'equity2_pb7'] / non_finacial.loc[:, 'pb'], 3)
+            non_finacial.loc[:, 'equity3_pb7_pb'] = np.round(non_finacial.loc[:, 'equity3_pb7'] / non_finacial.loc[:, 'pb'], 3)
+            non_finacial.loc[:, 'roe_half_year_pb7_pb'] = np.round(non_finacial.loc[:, 'roe_half_year_pb7'] / non_finacial.loc[:, 'pb'], 3)
+            non_finacial.loc[:, 'roe_year_pb7_pb'] = np.round(non_finacial.loc[:, 'roe_year_pb7'] / non_finacial.loc[:, 'pb'], 3)
+            # 太假的不要，干扰数据，净资产本季报之后发生变化>1.1的排除
+            non_finacial = non_finacial.loc[(non_finacial.equity2_pb7 < 11) & (non_finacial.equity_rejust < 1.1) & (non_finacial.roe_year_pb7_pb < 11)]
+            st = non_finacial.loc[:, ['equity2_pb7_pb', 'equity3_pb7_pb', 'roe_half_year_pb7_pb', 'roe_year_pb7_pb']].describe([.25, .5, .75, .85, .95]).T.reset_index(level=0)
+            st.columns = ['category', 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per75', 'per85', 'per95', 'max']
+            st.loc[:, 'statype'] = 'non_finacial'
+            st.index = [df.name] * 4
+            # rs.append(st)
+            # return pd.concat(rs)
+            return st
+
+        # print(self.basic.loc[:,['equity_pb6','equity_pb7','roe_year_pb6','roe_year_pb7']].head())
+        # pass
+        dailymarket = basic.groupby('trade_date').apply(_dailystat)
+
+
+        def _top5(df,dailymarket):
             '''equity2_pb7  2年净资产增速对应pb, /实际pb 得出价值倍数，找出价值倍数大于95%数据，这个指标十有八九不靠谱,还不如用roe_year_pb7'''
-            if df.name in self.dailymarket.index.levels[0]:
-                dailymarket = self.dailymarket.loc[df.name]
+            if df.name in dailymarket.index.levels[0]:
+                dailymarket = dailymarket.loc[df.name]
                 if (dailymarket[dailymarket.statype == 'non_finacial'].shape[0] == 0):
                     print(dailymarket)
                 else:
@@ -215,14 +219,12 @@ class simpleValued:
                     df.loc[:, 'half_roe_sell'] = dailymarket[dailymarket.category == 'roe_half_year_pb7_pb'].per95[0] - df.roe_half_year_pb7 / df.pb - 0.3
                     return df
 
-        return basic.groupby('trade_date',as_index=False).apply(_top5).set_index(['trade_date', 'ts_code'],drop=False)
+        return basic.groupby('trade_date',as_index=False).apply(_top5,dailymarket=dailymarket).set_index(['trade_date', 'ts_code'],drop=False)
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
 
 
     def industry_trend_top10(self,data):
         industry_daily = pro.QA_fetch_get_finindicator(start=self.start-3, end=self.end).sort_values(['ts_code','trade_date'], ascending = True)
-
-
         def _trend(data):
             '''
             行业趋势 计算总市值,流通市值,总扣非盈利,总净资产,总资产,总成交量,
@@ -230,33 +232,63 @@ class simpleValued:
             :return:
             '''
             df = data[data.trade_date>=self.start]
+            dates = [str(int(self.start.trade_date[0:4]) - 2) + '0430', str(int(self.start.trade_date[0:4]) - 2) + '0830',
+                     str(int(self.start.trade_date[0:4]) - 2) + '1031', str(int(self.start.trade_date[0:4]) - 1) + '0430',
+                     str(int(self.start.trade_date[0:4]) - 1) + '0830', str(int(self.start.trade_date[0:4]) - 1) + '1031']
+            resampledf = dates.apply(lambda x, y: y[y.trade_date < x].tail(1), y=data)
 
-            for item in df:
-                #roe 趋势计算 TODO 季报公布期间，逐日计算,1.01-4.30 取 10.30,8.30,4.30,连续2年   10.01-10.30 取 8.30,4.30 ..连续两年
-                #TODO 非季报公布期间,继承最新deg即可
+            indicator = pd.DataFrame(columns=['trade_date','industry','q_gr_ttm_poly','q_dtprofit_ttm_poly','q_opincome_ttm_poly','q_gr_poly','q_profit_poly','q_dtprofit_poly','q_opincome_poly','roe','pe'])
+            for index,item in df.iterrows:
             # roe 、总资产、净利润、货币资金、存货、净资产类同处理
-                dates = [str(int(item.trade_date[0:4]) - 2) + '0430', str(int(item.trade_date[0:4]) - 2) + '0830',
-                         str(int(item.trade_date[0:4]) - 2) + '1031', str(int(item.trade_date[0:4]) - 1) + '0430',
-                         str(int(item.trade_date[0:4]) - 1) + '0830', str(int(item.trade_date[0:4]) - 1) + '1031']
-                if item.trade_date[4:8] < "0431":
-                    dates.append(item.trade_date)
-                if item.trade_date[4:8] < "0830" and item.trade_date[4:8] > "0430":
-                    dates.append([item.trade_date[0:4] + '0430', item.trade_date])
-                if item.trade_date[4:8] < "1231" and item.trade_date[4:8] > "0830":
-                    dates.append([item.trade_date[0:4] + '0430', item.trade_date[0:4] + '0830', item.trade_date])
-                resampledf = dates.apply(lambda x, y: y[y.trade_date < x].tail(1), y=data)
-                fit, p2 = RegUtil.regress_y_polynomial(resampledf.q_gr_ttm, poly=3, show=True)
-                fit, p2 = RegUtil.regress_y_polynomial(resampledf.q_profit_ttm, poly=3, show=True)
-                fit, p2 = RegUtil.regress_y_polynomial(resampledf.q_dtprofit_ttm, poly=3, show=True)
-                fit, p2 = RegUtil.regress_y_polynomial(resampledf.q_opincome_ttm, poly=3, show=True)
-                roe = item.q_dtprofit_ttm / item.total_hldr_eqy_exc_min_int
 
+                if item.trade_date[4:8] <= "0831" and item.trade_date[4:8] > "0431" and item.trade_date[0:4] + '0431' not in dates:
+                    dates.append([item.trade_date[0:4] + '0431'].apply(lambda x, y: y[y.trade_date < x].tail(1), y=data))
+                    resampledf.append([item.trade_date[0:4] + '0431', item.trade_date])
+                if item.trade_date[4:8] <= "1231" and item.trade_date[4:8] > "0831" and item.trade_date[0:4] + '0831' not in dates:
+                    dates.append([item.trade_date[0:4] + '0831'].apply(lambda x, y: y[y.trade_date < x].tail(1), y=data))
+                    resampledf.append([item.trade_date[0:4] + '0831', item.trade_date])
+                resample = resampledf.append(item.trade_date.apply(lambda x, y: y[y.trade_date < x].tail(1), y=data))
+                fit, p1 = RegUtil.regress_y_polynomial(resample[-8:].q_gr_ttm, poly=3, show=False)
+                fit, p2 = RegUtil.regress_y_polynomial(resample[-8:].q_profit_ttm, poly=3, show=False)
+                fit, p3 = RegUtil.regress_y_polynomial(resample[-8:].q_dtprofit_ttm, poly=3, show=False)
+                fit, p4 = RegUtil.regress_y_polynomial(resample[-8:].q_opincome_ttm, poly=3, show=False)
+                fit, p5 = RegUtil.regress_y_polynomial(resample[-8:].q_gr, poly=3, show=False)
+                fit, p6 = RegUtil.regress_y_polynomial(resample[-8:].q_profit, poly=3, show=False)
+                fit, p7 = RegUtil.regress_y_polynomial(resample[-8:].q_dtprofit, poly=3, show=False)
+                fit, p8 = RegUtil.regress_y_polynomial(resample[-8:].q_opincome, poly=3, show=False)
+                roe = item.q_dtprofit_ttm / item.total_hldr_eqy_exc_min_int
+                pe = item.ind_total_mv/item.q_dtprofit_ttm
+                indicator.loc[index] = [item.trade_date,item.name,p1(8),p2(8),p3(8),p4(8),p5(8),p6(8),p7(8),p8(8),roe,pe]
+            return df
         industry_daily = industry_daily.groupby("industry").apply(_trend)
         df = pd.merge(data, self.stock.loc[:, ['ts_code', 'industry']], left_on=['ts_code','trade_date'], right_on='ts_code', how="inner")  # 剔除缺少行业的
         df = pd.merge(df, industry_daily, left_on=['industry', 'trade_date'], right_on=['industry', 'date'], how="inner")  # 剔除行业样本太少的
 
 
+        # 每日统计指标
+        def _dailystat(df):
+            st = df.loc[:, ['q_gr_ttm_poly','q_dtprofit_ttm_poly','q_opincome_ttm_poly','q_gr_poly','q_profit_poly','q_dtprofit_poly','q_opincome_poly','roe','pe']].describe([.25, .5, .75, .85, .95]).T.reset_index(level=0)
+            st.columns = ['category', 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per75', 'per85', 'per95', 'max']
+            st.index = [df.name] * 9
+            return st
 
+        dailymarket = industry_daily.groupby('trade_date').apply(_dailystat)
+
+        def _top10(df,dailymarket):
+            if df.name in dailymarket.index.levels[0]:
+                dailymarket = dailymarket.loc[df.name]
+                df.loc[:, 'industry_roe_buy'] = df.roe - dailymarket[dailymarket.category == 'roe'].per95[0]
+                df.loc[:, 'industry_pe_buy'] = df.roe - dailymarket[dailymarket.category == 'pe'].per85[0]
+                df.loc[:, 'q_dtprofit_poly'] = df.roe - dailymarket[dailymarket.category == 'q_dtprofit_poly'].per85[0]
+            pass
+
+        return df.groupby('trade_date', as_index=False).apply(_top10, dailymarket=dailymarket).set_index(['trade_date', 'ts_code'], drop=False)
+
+    def simpleStrategy(self):
+        df = self.non_finacal_top5_valued()
+        df = self.industry_trend_top10(df)
+        #df.loc[:'f_buy'] =
+        return df
 
 
 
@@ -267,13 +299,13 @@ class simpleValued:
 
 if __name__ == '__main__':
     #finacial = pro.QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
-    sv  = simpleValued('20180101','20180930')
-    sv.indcators_prepare()
-    df = sv.non_finacal_top5_valued()
+    # sv  = simpleValued('20180101','20180930')
+    # sv.indcators_prepare()
+    # df = sv.non_finacal_top5_valued()
 
     #asset = pro.QA_fetch_get_assetAliability(start='20160101', end='20180930')
     #print(asset.head())
-
+    print(QA.EMA(pd.Series([3.1,4.1,5.1,6.1,7.1,8.1,9.1,10.1]),4))
 
 
     #fin = finacial.groupby('ts_code').apply(_indicator)
