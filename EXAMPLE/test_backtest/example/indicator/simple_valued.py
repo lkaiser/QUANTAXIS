@@ -115,7 +115,7 @@ class simpleValued:
             basic.loc[:, 'roe_half_year_pb7'] = 0
             basic.loc[:, 'equity_rejust'] = 0
             basic.groupby('ts_code').apply(_indicatorCp)
-            basic.to_pickle(self.basic_temp_name)
+            #basic.to_pickle(self.basic_temp_name)
 
         return basic
 
@@ -287,6 +287,8 @@ class simpleValued:
     def simpleStrategy(self):
         df = self.non_finacal_top5_valued()
         df = self.industry_trend_top10(df)
+        df.to_pickle('test.pkl')
+        #stock_signal = pd.read_pickle('test.pkl')
         #df.loc[:'f_buy'] =
         return df
 

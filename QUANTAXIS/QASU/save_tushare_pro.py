@@ -45,7 +45,8 @@ from QUANTAXIS.QAFetch.QATushare import (QA_fetch_get_stock_day,
 from QUANTAXIS.QAFetch.QATusharePro import (QA_fetch_get_assetAliability,
                                             QA_fetch_get_cashflow,
                                             QA_fetch_get_income,
-                                            QA_fetch_get_dailyindicator)
+                                            QA_fetch_get_dailyindicator,
+                                            QA_fetch_get_finindicator)
 from QUANTAXIS.QAUtil import (QA_util_date_stamp, QA_util_log_info,
                               QA_util_time_stamp, QA_util_to_json_from_pandas,
                               trade_date_sse)
@@ -994,15 +995,18 @@ equity_yoy	float	净资产同比增长率
             print(e)
             time.sleep(30)
             income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code,fields=fields)
+        finally:
+            #print(income.loc[:,['ts_code','ann_date','q_dtprofit']].head())
+            #income = income.sort_values(by=['ann_date', 'end_date'],ascending=False)
             income['q_dtprofit'].fillna(method='bfill', inplace=True)
+            income['q_dtprofit'].fillna(method='pad', inplace=True)
             income.loc[:, 'q_profit'] = income['q_dtprofit'] / income['q_dtprofit_to_profit']  # 单季度净利润
             income.loc[:, 'q_gr'] = income.loc[:, 'q_profit'] / income['q_profit_to_gr']  # 单季度营业总收入
-            income.loc[:, 'profit_ttm'] = income.loc[:, 'q_profit'].rolling(window=4, min_periods=1).mean()
-            income.loc[:, 'gr_ttm'] = income.loc[:, 'q_gr'].rolling(window=4, min_periods=1).mean()
-            income.loc[:, 'q_opincome_ttm'] = income.loc[:, 'q_opincome'].rolling(window=4, min_periods=1).mean()  # 经营活动单季度净收益
-            income.loc[:, 'q_dtprofit_ttm'] = income.loc[:, 'q_dtprofit'].rolling(window=4, min_periods=1).mean()  # 扣非单季度净利润
-        finally:
-            pass
+            income.loc[:, 'profit_ttm'] = income.loc[:, 'q_profit'][::-1].rolling(window=4, min_periods=1).mean()[::-1]
+            income.loc[:, 'gr_ttm'] = income.loc[:, 'q_gr'][::-1].rolling(window=4, min_periods=1).mean()[::-1]
+            income.loc[:, 'q_opincome_ttm'] = income.loc[:, 'q_opincome'][::-1].rolling(window=4, min_periods=1).mean()[::-1] # 经营活动单季度净收益
+            income.loc[:, 'q_dtprofit_ttm'] = income.loc[:, 'q_dtprofit'][::-1].rolling(window=4, min_periods=1).mean()[::-1]  # 扣非单季度净利润
+
         print(" Get stock fina_indicator reports from tushare,reports count is %d" % len(income))
         if not income.empty:
             #coll = client.stock_report_income_tushare
@@ -1259,6 +1263,7 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
     basic = pro.stock_basic()
     times = pd.date_range(start=start_day, end=datetime.datetime.now().strftime('%Y%m%d'), freq='6MS')
     industry_daily = client.industry_daily_tushare
+
     for i_ in range(len(times)):
         end = None
         end_halfyear_af = None
@@ -1268,18 +1273,21 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
         else:
             end = times[i_ + 1].strftime('%Y%m%d')
             end_halfyear_af = (times[i_] + pd.Timedelta(215, unit='D')).strftime('%Y%m%d')
-        seasons = pd.DataFrame(pd.date_range(start_halfyear_bf,end_halfyear_af,freq='Q-DEC').strftime('%Y%m%d'),columns=['end_date'])
+
 
         curdaily = QA_fetch_get_dailyindicator(times[i_].strftime('%Y%m%d'),end).sort_values(by=['trade_date'])# daily_basic.find({"trade_date": {"$gte": times[i_].strftime('%Y%m%d'), "$lt": end}})
         start_2years_bf = (times[i_] - pd.Timedelta(730, unit='D')).strftime('%Y%m%d')
         start_halfyear_bf = (times[i_] - pd.Timedelta(215, unit='D')).strftime('%Y%m%d')
         curbasic = basic[(basic.list_date < start_2years_bf)] #basic.list_status == 'D' 去掉了,考虑到list_status不是对历史状态的描述
+        seasons = pd.DataFrame(pd.date_range(start_halfyear_bf, end_halfyear_af, freq='Q-DEC').strftime('%Y%m%d'), columns=['end_date'])
 
-        #先按ann_date，再按end_date排序，比如年报和1季报同日公布,此时还是需要排个序的
-        ast = QA_fetch_get_assetAliability(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
-        profit = QA_fetch_get_income(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
-        cash = QA_fetch_get_cashflow(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
-        fina = QA_fetch_get_dailyindicator(start_halfyear_bf, end_halfyear_af).sort_values(by=['ann_date','end_date'])
+        #先按end_date，再按ann_date排序，比如年报和1季报同日公布,此时还是需要排个序的
+        print(start_halfyear_bf, end_halfyear_af)
+        ast = QA_fetch_get_assetAliability(start_halfyear_bf,end_halfyear_af)#.sort_values(by=['end_date', 'ann_date'],ascending=False)#ast_all[(ast_all.end_date<end_halfyear_af) & (ast_all.end_date>start_halfyear_bf)]
+        profit = QA_fetch_get_income(start_halfyear_bf,end_halfyear_af)#.sort_values(by=['end_date', 'ann_date'],ascending=False)
+        cash = QA_fetch_get_cashflow(start_halfyear_bf,end_halfyear_af)#.sort_values(by=['end_date', 'ann_date'],ascending=False)
+        fina = QA_fetch_get_finindicator(start_halfyear_bf,end_halfyear_af)#.sort_values(by=['end_date', 'ann_date'],ascending=False)
+
 
         def _industry_indicator(data, time, curdaily,seasons, ast, profit, cash,fina):
             df = pd.merge(data, curdaily, on='ts_code')  # 内联，可剔除整个计算周期内无交易的code
@@ -1302,8 +1310,8 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
             ast = ast[ast.ts_code.isin(first.ts_code.values)]               #限定资产负债表、利润表、现金流表只包含first所含股票
             fina = fina[fina.ts_code.isin(first.ts_code.values)]
 
-            if len(ast.ts_code.unique().values) < len(first):
-                first = first[first.ts_code.isin(ast.ts_code.unique().values)]
+            if len(ast.ts_code.unique()) < len(first):
+                first = first[first.ts_code.isin(ast.ts_code.unique())]
             index_json = {"name": data.name, "time": time, " compose": first.ts_code.values.tolist(),"init_time": first.trade_date.values.tolist(), "total": len(first),"scare": first.total_mv.sum(), 'update_time': datetime.datetime.now()}
             if  len(first)<3: #小于3只，没必要做指数了
                 return None
@@ -1311,11 +1319,13 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
             df = df[df.ts_code.isin(first.ts_code.values)]  # 取总市值前十的股票构成该行业指数
 
             inicators = pd.merge(ast[['ts_code','end_date','ann_date','inventories','notes_receiv','accounts_receiv','notes_payable','acct_payable','money_cap','fix_assets','cip','goodwill','total_cur_assets','total_cur_liab','total_hldr_eqy_exc_min_int']], fina[['ts_code','end_date','ann_date','q_gr','q_profit','q_opincome','q_dtprofit']], on=['ts_code','end_date'], how='outer')
-            inicators.loc[:,'ann_date'] = np.where(~np.isnan(inicators.ann_date_x),inicators.ann_date_x,inicators.ann_date_y)# np.where不错，好用
+            #print(inicators.columns)
+            #print(inicators.loc[:,['ts_code','ann_date_y','inventories','q_gr','q_profit']].head())
+            inicators.loc[:,'ann_date'] = np.where(~pd.isnull(inicators.ann_date_x),inicators.ann_date_x,inicators.ann_date_y)# np.where不错，好用
 
             def _report_fill(data,seasons):
                 data.loc[:, 'status'] = '0'
-                df = pd.merge(data, seasons, on='end_date', how='outer')
+                df = pd.merge(data, seasons, on='end_date', how='outer')#补全所有丢失season数据，保证每个ts_code 在统计的区间段内 每个season都有数据，补全用前向+后向补全
                 df.loc[df.status.isnull(),'status'] = '1'
                 def _ann_date_ca(end_date):
                     if end_date[4:8] == "0331":
@@ -1344,7 +1354,8 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
                 # df.total_cur_assets.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
                 # df.total_cur_liab.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
                 # df.total_hldr_eqy_exc_min_int.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
-                df.fillna(method='pad', inplace=True).fillna(method='bfill', inplace=True)  # 前后向填充
+                df.fillna(method='pad', inplace=True)
+                df.fillna(method='bfill', inplace=True)  # 前后向填充
                 return df
 
             inicators = inicators.groupby('ts_code',as_index=False).apply(_report_fill,seasons)
@@ -1385,8 +1396,8 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
 
                 dic = {}
 
-                dic.ind_deal_mv = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()  # 当日有成交的总金额/当日股票市值占比 =估算的行业成交净额（有日行情的个股）
-                dic.ind_total_mv = data.total_mv.sum() / data.total_mv_rate.sum()  # 估算行业总市值（有日行情的个股）
+                dic['ind_deal_mv'] = (data.turnover_rate_f * data.close).sum() / data.deal_mv_rate.sum()  # 当日有成交的总金额/当日股票市值占比 =估算的行业成交净额（有日行情的个股）
+                dic['ind_total_mv'] = data.total_mv.sum() / data.total_mv_rate.sum()  # 估算行业总市值（有日行情的个股）
 
 
 
@@ -1427,6 +1438,7 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
 
         print(" Get industry daily from tushare,reports count is %d" % len(industry))
         if not industry.empty:
+            industry_daily.remove({'end_date':{ "$lte": end,"$gte": times[i_].strftime('%Y%m%d')}})
             # coll = client.stock_report_income_tushare
             # client.drop_collection(coll)
             json_data = QA_util_to_json_from_pandas(industry)
@@ -1444,15 +1456,15 @@ if __name__ == '__main__':
     #DATABASE.stock_daily_basic_tushare.remove()
 
     # QA_SU_save_stock_daily_basic(start_day='20190101')
-    #QA_SU_save_stock_report_fina_indicator(start_day='20010101',ind=2150)
+    #QA_SU_save_stock_report_fina_indicator(start_day='20010101')
     # QA_SU_save_stock_report_assetliability(start_day='20190101')
     # QA_SU_save_stock_report_income(start_day='20190101')
     # QA_SU_save_stock_report_cashflow(start_day='20190101')
 
 
-    #QA_SU_save_industry_indicator(start_day='20010101')
-    print(pd.date_range('20170331','20171231',freq='Q-DEC').strftime('%Y%m%d'))
-    result = []
+    QA_SU_save_industry_indicator(start_day='20050101')
+    #print(pd.date_range('20170331','20171231',freq='Q-DEC').strftime('%Y%m%d'))
+    #result = []
     # def when_done(r):
     #     """ProcessPoolExecutor每一个进程结束后结果append到result中"""
     #     result.append(r.result())
@@ -1500,7 +1512,8 @@ if __name__ == '__main__':
     # print(type(a.tolist()))
     # print(type(a))
     # print(type(c))
-
+    # print(pd.DataFrame({'key1':[1,1,1,2,2,2,3,3,3.5,5,5,5.5,6.5,6.3,7,7,8,8,10]}))
+    # print(pd.DataFrame({'key1':[1,1,1,2,2,2,3,3,3.5,5,5,5.5,6.5,6.3,7,7,8,8,10]}).rolling(window=4, min_periods=1).mean())
 
 
     #print('2019-05-22'>'2019-08-01')
