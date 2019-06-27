@@ -125,8 +125,8 @@ def QA_fetch_get_dailyindicator(start, end,code=None,collections=DATABASE.stock_
 
     return pd.DataFrame([item for item in cursor])#sort_values(['ts_code','trade_date'], ascending = True)
 
-def QA_fetch_get_industry_index(start, end,industry=None,collections=DATABASE.industry_daily_tushare):
-    query = {"date": {
+def QA_fetch_get_industry_daily(start, end,industry=None,collections=DATABASE.industry_daily_tushare):
+    query = {"trade_date": {
         "$lte": end,
         "$gte": start}}
     if industry:

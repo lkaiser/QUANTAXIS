@@ -224,7 +224,8 @@ class simpleValued:
 
 
     def industry_trend_top10(self,data):
-        industry_daily = pro.QA_fetch_get_finindicator(start=self.start-3, end=self.end).sort_values(['ts_code','trade_date'], ascending = True)
+        start_3years_bf = str(int(self.start[0:4]) - 3)+self.start[4:8]
+        industry_daily = pro.QA_fetch_get_industry_daily(start=start_3years_bf, end=self.end).sort_values(['industry','trade_date'], ascending = True)
         def _trend(data):
             '''
             行业趋势 计算总市值,流通市值,总扣非盈利,总净资产,总资产,总成交量,
@@ -232,22 +233,32 @@ class simpleValued:
             :return:
             '''
             df = data[data.trade_date>=self.start]
-            dates = [str(int(self.start.trade_date[0:4]) - 2) + '0430', str(int(self.start.trade_date[0:4]) - 2) + '0830',
-                     str(int(self.start.trade_date[0:4]) - 2) + '1031', str(int(self.start.trade_date[0:4]) - 1) + '0430',
-                     str(int(self.start.trade_date[0:4]) - 1) + '0830', str(int(self.start.trade_date[0:4]) - 1) + '1031']
-            resampledf = dates.apply(lambda x, y: y[y.trade_date < x].tail(1), y=data)
+            dates = [str(int(self.start[0:4]) - 3) + '0831',str(int(self.start[0:4]) - 3) + '1031',
+                     str(int(self.start[0:4]) - 2) + '0431', str(int(self.start[0:4]) - 2) + '0831',
+                     str(int(self.start[0:4]) - 2) + '1031', str(int(self.start[0:4]) - 1) + '0431',
+                     str(int(self.start[0:4]) - 1) + '0831', str(int(self.start[0:4]) - 1) + '1031']
+            resampledf = pd.DataFrame(list(map(lambda x, y: y[y.trade_date < x].tail(1), dates,[data]*6)))#dates.apply() #每个行业每天都数据，resampledf 取指定dates的最新一条数据
+            print(resampledf.columns)
+
 
             indicator = pd.DataFrame(columns=['trade_date','industry','q_gr_ttm_poly','q_dtprofit_ttm_poly','q_opincome_ttm_poly','q_gr_poly','q_profit_poly','q_dtprofit_poly','q_opincome_poly','roe','pe'])
-            for index,item in df.iterrows:
+            for index,item in df.iterrows():
             # roe 、总资产、净利润、货币资金、存货、净资产类同处理
 
                 if item.trade_date[4:8] <= "0831" and item.trade_date[4:8] > "0431" and item.trade_date[0:4] + '0431' not in dates:
-                    dates.append([item.trade_date[0:4] + '0431'].apply(lambda x, y: y[y.trade_date < x].tail(1), y=data))
-                    resampledf.append([item.trade_date[0:4] + '0431', item.trade_date])
-                if item.trade_date[4:8] <= "1231" and item.trade_date[4:8] > "0831" and item.trade_date[0:4] + '0831' not in dates:
-                    dates.append([item.trade_date[0:4] + '0831'].apply(lambda x, y: y[y.trade_date < x].tail(1), y=data))
-                    resampledf.append([item.trade_date[0:4] + '0831', item.trade_date])
-                resample = resampledf.append(item.trade_date.apply(lambda x, y: y[y.trade_date < x].tail(1), y=data))
+                    dates = dates.append([item.trade_date[0:4] + '0431'])
+                    resampledf = resampledf.append(list(map(lambda x, y: y[y.trade_date < x].iloc[-1], [item.trade_date[0:4] + '0431'],[data])))
+                if item.trade_date[4:8] <= "1031" and item.trade_date[4:8] > "0831" and item.trade_date[0:4] + '0831' not in dates:
+                    dates = dates.append([item.trade_date[0:4] + '0831'])
+                    resampledf = resampledf.append(list(map(lambda x, y: y[y.trade_date < x].iloc[-1], [item.trade_date[0:4] + '0831'], [data])))
+                    #resampledf = resampledf.append([item.trade_date[0:4] + '0831'].apply(lambda x, y: y[y.trade_date < x].tail(1), y=data))
+                if item.trade_date[4:8] > "1031" and item.trade_date[0:4] + '1031' not in dates:
+                    dates = dates.append([item.trade_date[0:4] + '1031'])
+                    resampledf = resampledf.append(list(map(lambda x, y: y[y.trade_date < x].iloc[-1], [item.trade_date[0:4] + '1031'], [data])))
+                    #resampledf = resampledf.append([item.trade_date[0:4] + '1031'].apply(lambda x, y: y[y.trade_date < x].tail(1), y=data))
+                resample = resampledf.append(list(map(lambda x, y: y[y.trade_date < x].iloc[-1], [item.trade_date], [data])))
+                #resample = resampledf.append(item.trade_date.apply(lambda x, y: y[y.trade_date < x].tail(1), y=data)) #每次循环最新一天都要替换，所以最新一天不能赋值给 resampledf,只能给resample
+                #print(resample)
                 fit, p1 = RegUtil.regress_y_polynomial(resample[-8:].q_gr_ttm, poly=3, show=False)
                 fit, p2 = RegUtil.regress_y_polynomial(resample[-8:].q_profit_ttm, poly=3, show=False)
                 fit, p3 = RegUtil.regress_y_polynomial(resample[-8:].q_dtprofit_ttm, poly=3, show=False)
@@ -260,12 +271,12 @@ class simpleValued:
                 pe = item.ind_total_mv/item.q_dtprofit_ttm
                 indicator.loc[index] = [item.trade_date,item.name,p1(8),p2(8),p3(8),p4(8),p5(8),p6(8),p7(8),p8(8),roe,pe]
             return df
-        industry_daily = industry_daily.groupby("industry").apply(_trend)
-        df = pd.merge(data, self.stock.loc[:, ['ts_code', 'industry']], left_on=['ts_code','trade_date'], right_on='ts_code', how="inner")  # 剔除缺少行业的
-        df = pd.merge(df, industry_daily, left_on=['industry', 'trade_date'], right_on=['industry', 'date'], how="inner")  # 剔除行业样本太少的
+        industry_daily = industry_daily.groupby("industry",as_index=False).apply(_trend)
+        df = pd.merge(data, self.stock.loc[:, ['ts_code', 'industry']], left_on=['ts_code','trade_date'], right_on='ts_code', how="inner")  # 找到每只code的行业，剔除缺少行业的
+        df = pd.merge(df, industry_daily, left_on=['industry', 'trade_date'], right_on=['industry', 'date'], how="inner")  # 合并code及其对应的行业数据，剔除行业样本太少的
 
 
-        # 每日统计指标
+        # 每日统计指标,数据丢失太严重，17w数据，有2.8w的q_dtprofit丢失，只好用前向或者后向填充，其他指标丢失更严重，失去统计意义
         def _dailystat(df):
             st = df.loc[:, ['q_gr_ttm_poly','q_dtprofit_ttm_poly','q_opincome_ttm_poly','q_gr_poly','q_profit_poly','q_dtprofit_poly','q_opincome_poly','roe','pe']].describe([.25, .5, .75, .85, .95]).T.reset_index(level=0)
             st.columns = ['category', 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per75', 'per85', 'per95', 'max']
@@ -278,16 +289,19 @@ class simpleValued:
             if df.name in dailymarket.index.levels[0]:
                 dailymarket = dailymarket.loc[df.name]
                 df.loc[:, 'industry_roe_buy'] = df.roe - dailymarket[dailymarket.category == 'roe'].per95[0]
-                df.loc[:, 'industry_pe_buy'] = df.roe - dailymarket[dailymarket.category == 'pe'].per85[0]
-                df.loc[:, 'q_dtprofit_poly'] = df.roe - dailymarket[dailymarket.category == 'q_dtprofit_poly'].per85[0]
+                df.loc[:, 'industry_pe_buy'] = df.pe - dailymarket[dailymarket.category == 'pe'].per85[0]
+                df.loc[:, 'q_dtprofit_poly'] = df.q_dtprofit_poly - dailymarket[dailymarket.category == 'q_dtprofit_poly'].per85[0]
             pass
 
         return df.groupby('trade_date', as_index=False).apply(_top10, dailymarket=dailymarket).set_index(['trade_date', 'ts_code'], drop=False)
 
     def simpleStrategy(self):
-        df = self.non_finacal_top5_valued()
-        df = self.industry_trend_top10(df)
-        df.to_pickle('test.pkl')
+        #df = self.non_finacal_top5_valued()
+
+        non_finacial_codes = self.stock[(self.stock.industry != '银行') & (self.stock.industry != '保险')].ts_code.values
+        basic =  self.basic[self.basic.ts_code.isin(non_finacial_codes)]
+        df = self.industry_trend_top10(basic)
+        #df.to_pickle('test.pkl')
         #stock_signal = pd.read_pickle('test.pkl')
         #df.loc[:'f_buy'] =
         return df
@@ -301,13 +315,14 @@ class simpleValued:
 
 if __name__ == '__main__':
     #finacial = pro.QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
-    # sv  = simpleValued('20180101','20180930')
-    # sv.indcators_prepare()
+    sv  = simpleValued('20180101','20181231')
+    sv.simpleStrategy()
+    #sv.indcators_prepare()
     # df = sv.non_finacal_top5_valued()
 
     #asset = pro.QA_fetch_get_assetAliability(start='20160101', end='20180930')
     #print(asset.head())
-    print(QA.EMA(pd.Series([3.1,4.1,5.1,6.1,7.1,8.1,9.1,10.1]),4))
+    #print(QA.EMA(pd.Series([3.1,4.1,5.1,6.1,7.1,8.1,9.1,10.1]),4))
 
 
     #fin = finacial.groupby('ts_code').apply(_indicator)
