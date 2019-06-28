@@ -1318,7 +1318,7 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
             in_index.insert_one(index_json)  # 保存每期指数构成成分，半年更新一次指数构成
             df = df[df.ts_code.isin(first.ts_code.values)]  # 取总市值前十的股票构成该行业指数
 
-            inicators = pd.merge(ast[['ts_code','end_date','ann_date','inventories','notes_receiv','accounts_receiv','notes_payable','acct_payable','money_cap','fix_assets','cip','goodwill','total_cur_assets','total_cur_liab','total_hldr_eqy_exc_min_int']], fina[['ts_code','end_date','ann_date','q_gr','q_profit','q_opincome','q_dtprofit']], on=['ts_code','end_date'], how='outer')
+            inicators = pd.merge(ast[['ts_code','end_date','ann_date','inventories','notes_receiv','accounts_receiv','notes_payable','acct_payable','money_cap','fix_assets','cip','goodwill','total_cur_assets','total_cur_liab','total_hldr_eqy_exc_min_int']], fina[['ts_code','end_date','ann_date','q_gr','q_profit','q_opincome','q_dtprofit','q_dtprofit_ttm']], on=['ts_code','end_date'], how='outer')
             #print(inicators.columns)
             #print(inicators.loc[:,['ts_code','ann_date_y','inventories','q_gr','q_profit']].head(1))
             inicators.loc[:,'ann_date'] = np.where(~pd.isnull(inicators.ann_date_x),inicators.ann_date_x,inicators.ann_date_y)# np.where不错，好用
@@ -1383,7 +1383,7 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
                 #if data.name=='20180702':
                     #print(primary.loc[:,['ann_date','ts_code','end_date']])
                 curprimary = primary[primary.ann_date<=data.name].groupby('ts_code').tail(1)
-                dic.update(curprimary.loc[:,['inventories','notes_receiv','accounts_receiv','notes_payable','acct_payable','money_cap','fix_assets','cip','goodwill','total_cur_assets','total_cur_liab','total_hldr_eqy_exc_min_int','q_gr','q_profit','q_opincome','q_dtprofit','q_dtprofit_ttm','q_gr_ttm','q_profit_ttm','q_opincome_ttm']].sum().to_dict())
+                dic.update(curprimary.loc[:,['inventories','notes_receiv','accounts_receiv','notes_payable','acct_payable','money_cap','fix_assets','cip','goodwill','total_cur_assets','total_cur_liab','total_hldr_eqy_exc_min_int','q_gr','q_profit','q_opincome','q_dtprofit','q_dtprofit_ttm']].sum().to_dict())
                 # dic.q_gr_ttm = curprimary.q_gr_ttm.sum() #营业收入
                 # dic.q_profit_ttm = curprimary.q_profit_ttm.sum()  # 净利润(含少数股东损益)
                 # dic.q_dtprofit_ttm = curprimary.q_dtprofit_ttm.sum()  # 净利润(扣非)
@@ -1441,7 +1441,7 @@ if __name__ == '__main__':
     # QA_SU_save_stock_report_cashflow(start_day='20190101')
 
 
-    QA_SU_save_industry_indicator(start_day='20180101')
+    QA_SU_save_industry_indicator(start_day='20050101')
     #print(pd.date_range('20170331','20171231',freq='Q-DEC').strftime('%Y%m%d'))
     #result = []
     # def when_done(r):
