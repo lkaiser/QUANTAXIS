@@ -988,12 +988,12 @@ equity_yoy	float	净资产同比增长率
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
         print('UPDATE stock fina_indicator Trying updating %s' % (df.iloc[i_].ts_code))
-        time.sleep(1)
+        time.sleep(0.5)
         try:
             income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code,fields=fields)
         except Exception as e:
             print(e)
-            time.sleep(30)
+            time.sleep(10)
             income = pro.fina_indicator(ts_code=df.iloc[i_].ts_code,fields=fields)
         finally:
             #print(income.loc[:,['ts_code','ann_date','q_dtprofit']].head())
@@ -1315,6 +1315,7 @@ def QA_SU_save_industry_indicator(start_day='20010101',client=DATABASE,force=Fal
             index_json = {"name": data.name, "time": time, " compose": first.ts_code.values.tolist(),"init_time": first.trade_date.values.tolist(), "total": len(first),"scare": first.total_mv.sum(), 'update_time': datetime.datetime.now()}
             if  len(first)<3: #小于3只，没必要做指数了
                 return None
+            in_index.remove({'name':data.name,time:time}) #先删
             in_index.insert_one(index_json)  # 保存每期指数构成成分，半年更新一次指数构成
             df = df[df.ts_code.isin(first.ts_code.values)]  # 取总市值前十的股票构成该行业指数
 
@@ -1435,7 +1436,7 @@ if __name__ == '__main__':
     #DATABASE.stock_daily_basic_tushare.remove()
 
     # QA_SU_save_stock_daily_basic(start_day='20190101')
-    #QA_SU_save_stock_report_fina_indicator(start_day='20010101')
+    #QA_SU_save_stock_report_fina_indicator(start_day='20010101',ind=1600)
     # QA_SU_save_stock_report_assetliability(start_day='20190101')
     # QA_SU_save_stock_report_income(start_day='20190101')
     # QA_SU_save_stock_report_cashflow(start_day='20190101')

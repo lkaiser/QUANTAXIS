@@ -109,7 +109,6 @@ def QA_fetch_get_income(start, end,code=None,collections=DATABASE.stock_report_i
     return pd.DataFrame([item for item in cursor]).sort_values(['ts_code','end_date'], ascending = True)
 
 def QA_SU_stock_info():
-    #set_token('0f7da64f6c87dfa58456e0ad4c7ccf31d6c6e89458dc5b575e028c64')
     pro = get_pro()
     return pro.stock_basic()
 
