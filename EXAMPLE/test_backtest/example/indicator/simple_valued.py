@@ -15,16 +15,16 @@ class simpleValued:
         self.end = end
         self.basic_temp_name = 'basic_temp_' +start+'_'+end +'.pkl'
         start_2years_bf = str(int(start[0:4]) - 3)
-        self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
-        self.income = pro.QA_fetch_get_income(start=start_2years_bf, end=end)
-        self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
-        if (os.path.isfile(self.basic_temp_name)):
-            self.basic = pd.read_pickle(self.basic_temp_name)
-        else:
-            basic = pro.QA_fetch_get_dailyindicator(start=start,end=end)
-            #print(basic.head().loc[:,['ts_code','trade_date','close','pe']])
-            self.basic = basic.sort_values(['ts_code','trade_date'], ascending = True)
-        self.stock = pro.QA_SU_stock_info()
+        # self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
+        # self.income = pro.QA_fetch_get_income(start=start_2years_bf, end=end)
+        # self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
+        # if (os.path.isfile(self.basic_temp_name)):
+        #     self.basic = pd.read_pickle(self.basic_temp_name)
+        # else:
+        #     basic = pro.QA_fetch_get_dailyindicator(start=start,end=end)
+        #     #print(basic.head().loc[:,['ts_code','trade_date','close','pe']])
+        #     self.basic = basic.sort_values(['ts_code','trade_date'], ascending = True)
+        # self.stock = pro.QA_SU_stock_info()
         self.dailymarket = None
         self.industry = None
 
@@ -40,8 +40,8 @@ class simpleValued:
             if(data['q_dt_roe'].isnull().all()):
                 roe_half_year = roe_year = np.array([np.nan] * data.shape[0])
             else:
-                roe_year = QA.EMA(data['q_dt_roe'], 4)*4/100+1
-                roe_half_year = QA.EMA(data['q_dt_roe'], 2)*4/100+1
+                roe_year = (QA.EMA(data['q_dt_roe'], 4)*4/100+1).fillna(method='bfill')
+                roe_half_year = (QA.EMA(data['q_dt_roe'], 2)*4/100+1).fillna(method='bfill')
             #近2年净资产收益率
             asset_rise_2year = (data['equity_yoy'].shift(4)/100+1)*(data['equity_yoy']/100+1)
             # 近3年净资产收益率
@@ -106,18 +106,21 @@ class simpleValued:
             #print(basic.loc[:,['equity_pb6','equity_pb7','roe_year_pb6','roe_year_pb7']].head())
             return data
 
-        # 获取每日equity_pb6、roe_year_pb6
-        if not (os.path.isfile(self.basic_temp_name)):
             #basic = self.basic
+        #  basic 日交易基本数据
+        # 增加 equity2_pb7、equity3_pb7、roe_year_pb7等几列指标,_indicatorCp运算时间过长，要20多分钟，需要
+        # 对中间结果加以保存,后续考虑通过并发框架实施
+        if not (os.path.isfile(self.basic_temp_name)):
             basic.loc[:, 'equity2_pb7'] = 0
             basic.loc[:, 'equity3_pb7'] = 0
             basic.loc[:, 'roe_year_pb7'] = 0
             basic.loc[:, 'roe_half_year_pb7'] = 0
             basic.loc[:, 'equity_rejust'] = 0
-            basic.groupby('ts_code').apply(_indicatorCp)
-            #basic.to_pickle(self.basic_temp_name)
-
-        return basic
+            df = basic.groupby('ts_code').apply(_indicatorCp)
+            df.to_pickle(self.basic_temp_name)
+            return df
+        else:
+            return pd.read_pickle(self.basic_temp_name)
 
     def non_finacal_top5_valued(self,data=None):
         """
@@ -132,6 +135,8 @@ class simpleValued:
         basic = data
         if basic is None:
             basic = self.basic[self.basic.ts_code.isin(non_finacial_codes)]
+
+        basic = self.indcators_prepare(basic)
 
         def _trash_fiter(df):
             '''垃圾排除大法 剔除商誉过高、现金流不充裕，主营利润占比低、资产负债率过高、存货占比、应收占比'''
@@ -174,7 +179,6 @@ class simpleValued:
                 data = data[~((data.trade_date >= k[0]) & (data.trade_date < k[1]))]
                 return data
 
-        basic = self.indcators_prepare(basic)
         basic = basic.groupby('ts_code',as_index=False).apply(_trash_fiter)
 
 
@@ -298,9 +302,9 @@ class simpleValued:
                 fit, p7 = RegUtil.regress_y_polynomial(resample[ind:].q_dtprofit, poly=3, show=False)
                 fit, p8 = RegUtil.regress_y_polynomial(resample[ind:].q_opincome, poly=3, show=False)
                 roe = item.q_dtprofit / item.total_hldr_eqy_exc_min_int
-                pe = item.ind_total_mv/item.q_dtprofit
+                pe = item.ind_total_mv*10000/item.q_dtprofit
                 roe_ttm = item.q_dtprofit_ttm / item.total_hldr_eqy_exc_min_int
-                pe_ttm = item.ind_total_mv/item.q_dtprofit_ttm
+                pe_ttm = item.ind_total_mv*10000/item.q_dtprofit_ttm
                 indicator.loc[index] = [item.trade_date,data.name,p3(8),p5(8),p6(8),p7(8),p8(8),roe,pe,roe_ttm,pe_ttm]
             return indicator
         industry_daily = industry_daily.groupby("industry",as_index=False).apply(_trend)
@@ -355,18 +359,17 @@ class simpleValued:
         return df.groupby('trade_date', as_index=False).apply(_top10, dailymarket=dailymarket).set_index(['trade_date', 'ts_code'], drop=False)
 
     def simpleStrategy(self):
-        df = None
-        if (os.path.isfile('test.pkl')):
-            df = pd.read_pickle('test.pkl')
+        #print(os.path.abspath(__file__))
+        file = os.path.join(os.path.dirname(os.path.abspath(__file__)),'test.pkl')
+        print(file)
+        if (os.path.isfile(file)):
+            df = pd.read_pickle(file)
         else:
             df = self.non_finacal_top5_valued()
-
-            #non_finacial_codes = self.stock[(self.stock.industry != '银行') & (self.stock.industry != '保险')].ts_code.values
-            #basic =  self.basic[self.basic.ts_code.isin(non_finacial_codes)]
             df = self.industry_trend_top10(df)
-            df.to_pickle('test.pkl')
+            df.to_pickle(file)
         df.loc[:,'buy'] = (df.roe_buy>0) & (df.half_roe_buy>df.roe_buy) & (df.industry_roe_buy>0)
-        df.loc[:,'sell'] = df[(df.roe_sell>0)]
+        df.loc[:,'sell'] = df.roe_sell>0
         #stock_signal = pd.read_pickle('test.pkl')
         #df.loc[:'f_buy'] =
         #print(df.head())
@@ -390,6 +393,7 @@ class simpleValued:
 
 if __name__ == '__main__':
     #finacial = pro.QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
+    print('wtf')
     sv  = simpleValued('20180101','20181231')
     sv.simpleStrategy()
     #sv.indcators_prepare()

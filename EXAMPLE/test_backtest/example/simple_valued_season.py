@@ -26,7 +26,7 @@ class simpleValuedSeason:
 
     def simple_backtest(self,AC:QA.QA_Account, code, start:str, end:str):
         '''
-        简单价值评估回测
+        简单价值评估,季度评测之一把梭哈
         :param AC: QA_Account
         :param code: 股票代码
         :type list or str
@@ -38,13 +38,7 @@ class simpleValuedSeason:
         #DATA = pro.QA_SU_save_stock_daily(code, start, end)
         # todo 计算信号
         sv = simpleValued(start,end)
-        # sv.indcators_prepare()
-        # stock_signal = sv.non_finacal_top5_valued()
-        # sv.industry_trend_top10()
-        # stock_signal.to_pickle('test.pkl')
         stock_signal = sv.simpleStrategy()
-        stock_signal = pd.read_pickle('test.pkl')
-        #print(stock_signal.head())
         stock_signal.loc[:,'open'] = stock_signal.loc[:,'high'] = stock_signal.loc[:,'low'] = stock_signal['close']
         stock_signal.loc[:,'vol'] = 10000000
         stock_signal.loc[:,'date'] = stock_signal['trade_date'].str[0:4]+'-'+stock_signal['trade_date'].str[4:6]+'-'+stock_signal['trade_date'].str[6:8]#['trade_date']
@@ -56,14 +50,17 @@ class simpleValuedSeason:
                     drop_level=False)
             peroid_item.loc[:,['ts_code']] = peroid_item.ts_code.str[0:6]
             # 可卖数量
-            buy_candidates = peroid_item[(peroid_item.roe_buy>0) & (peroid_item.half_roe_buy>peroid_item.roe_buy)]#选取roe增速上移的
-            sell_candidates = peroid_item[(peroid_item.roe_sell>0)]
+            buy_candidates = peroid_item[peroid_item.buy]#选取roe增速上移的
+            sell_candidates = peroid_item[peroid_item.sell]
             elimits = []
             if not AC.hold_table().empty:
                 #print(type(peroid_item.ts_code))
                 elimits = set(AC.hold_table().index).difference(peroid_item.ts_code.str[0:6].values)#mutiple index  index0 为日期 index1 为ts_code基本面发生变化，直接清空
             if not sell_candidates.empty or not elimits.empty:
                 sells = set(sell_candidates.ts_code.str[0:6]).intersection([] if AC.hold_table().empty else set(AC.hold_table().index)).union(elimits)
+                if "20181228" == peroid_item.trade_date[0]:
+                    sells = sells.union(set(AC.hold_table().index))
+                print("########could sells code = ",sells)
                 for code in sells:
                     cur_account_sotck_code_sell_available_amount = AC.sell_available.get(code[0:6], 0)
                     if (cur_account_sotck_code_sell_available_amount > 0):
@@ -92,7 +89,7 @@ class simpleValuedSeason:
             cash = AC.cash_available
             if cash and not buy_candidates.empty:
                 buys = buy_candidates[0:5] if len(buy_candidates)>5  else buy_candidates
-                #print(buys)
+                print("########could buy code = " , buys.ts_code)
                 for code in buys.ts_code:
                     time = peroid_item.trade_date[0]
                     time = time[0:4] + '-' + time[4:6] + '-' + time[6:8]
@@ -143,7 +140,7 @@ class simpleValuedSeason:
         # backtest_code_list = QA.QA_fetch_stock_block_adv().code[0:10]
         backtest_code_list = '000001'
         backtest_start_date = '20180101'
-        backtest_end_date = '20181021'
+        backtest_end_date = '20181231'
 
         #Broker = QA.QA_BacktestBroker()
         AC = QA.QA_Account(
@@ -210,7 +207,7 @@ if __name__ == '__main__':
     # backtest_code_list = QA.QA_fetch_stock_block_adv().code[0:10]
     backtest_code_list = '000001'
     backtest_start_date = '20180101'
-    backtest_end_date = '20181021'
+    backtest_end_date = '20181231'
 
     Broker = QA.QA_BacktestBroker()
     AC = QA.QA_Account(
@@ -232,10 +229,10 @@ if __name__ == '__main__':
     svs = simpleValuedSeason()
     svs.simple_backtest(AC, backtest_code_list, backtest_start_date, backtest_end_date)
 
-    AC.save()
+    #AC.save()
 
     # 结果
-    #print(AC.message)
+    print(AC.message)
     print(AC.history_table.loc[:, ['datetime', 'code', 'price', 'amount', 'tax']])
 
 
