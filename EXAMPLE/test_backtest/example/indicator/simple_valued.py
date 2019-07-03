@@ -35,7 +35,12 @@ class simpleValued:
          """
         #daily = pro.QA_fetch_get_dailyindicator(start=start,end=end)
 
-        def _indicator(data):
+        def _ver_indicator(data):
+            '''
+            纵轴指标
+            :param data:
+            :return:
+            '''
             #print(data['q_dt_roe'].head())
             if(data['q_dt_roe'].isnull().all()):
                 roe_half_year = roe_year = np.array([np.nan] * data.shape[0])
@@ -82,27 +87,35 @@ class simpleValued:
                 data.loc[:, 'q4_dtprofit'] = QA.EMA(data['q_dtprofit'], 4)
             return data
 
-        self.finacial = self.finacial.groupby('ts_code').apply(_indicator)
+        self.finacial = self.finacial.groupby('ts_code').apply(_ver_indicator)
 
+        # def _hor_indicator(data):
+        #     '''
+        #     横轴指标
+        #     :param data:
+        #     :return:
+        #     '''
+        #     print('aaa')
+        #     pass
+        #
+        #
+        # self.finacial = self.finacial.groupby('trade_date').apply(_hor_indicator)
         def _indicatorCp(data):
             fin = self.finacial[self.finacial.ts_code==data.name]
             #ast = self.asset.loc[self.asset.ts_code==data.name]
             for i in range(0, fin.shape[0]):
                 if i+1 < fin.shape[0]:
                     query = (data.trade_date >= fin.iloc[i].ann_date) & (data.trade_date < fin.iloc[i + 1].ann_date)
-                    data.loc[query, ['equity2_pb7']] = fin.iloc[i].equity2_pb7
-                    data.loc[query, ['equity3_pb7']] = fin.iloc[i].equity3_pb7
-                    data.loc[query, ['roe_half_year_pb7']] = fin.iloc[i].roe_half_year_pb7
-                    data.loc[query, ['roe_year_pb7']] = fin.iloc[i].roe_year_pb7
-                    data.loc[query, ['roe_half_year_pb7']] = fin.iloc[i].roe_half_year_pb7
-                    data.loc[query, ['equity_rejust']] = np.round(data.loc[query].total_mv / data.loc[query].pb * 10000 /fin.iloc[i].netasset ,2)
                 else:
                     query = data.trade_date >= fin.iloc[i].ann_date
-                    data.loc[query, ['equity2_pb7']] = fin.iloc[i].equity2_pb7
-                    data.loc[query, ['equity3_pb7']] = fin.iloc[i].equity3_pb7
-                    data.loc[query, ['roe_half_year_pb7']] = fin.iloc[i].roe_half_year_pb7
-                    data.loc[query, ['roe_year_pb7']] = fin.iloc[i].roe_year_pb7
-                    data.loc[query, ['equity_rejust']] = np.round(data.loc[query].total_mv / data.loc[query].pb * 10000 / fin.iloc[i].netasset,2)
+                data.loc[query, ['equity2_pb7']] = fin.iloc[i].equity2_pb7
+                data.loc[query, ['equity3_pb7']] = fin.iloc[i].equity3_pb7
+                data.loc[query, ['roe_half_year_pb7']] = fin.iloc[i].roe_half_year_pb7
+                data.loc[query, ['roe_year_pb7']] = fin.iloc[i].roe_year_pb7
+                data.loc[query, ['equity_rejust']] = np.round(data.loc[query].total_mv / data.loc[query].pb * 10000 / fin.iloc[i].netasset,2)
+                data.loc[query, ['q_dt_roe']] = fin.iloc[i].q_dt_roe
+                data.loc[query, ['roe_yearly']] = fin.iloc[i].roe_yearly
+
             #print(basic.loc[:,['equity_pb6','equity_pb7','roe_year_pb6','roe_year_pb7']].head())
             return data
 
@@ -196,8 +209,8 @@ class simpleValued:
             non_finacial.loc[:, 'roe_year_pb7_pb'] = np.round(non_finacial.loc[:, 'roe_year_pb7'] / non_finacial.loc[:, 'pb'], 3)
             # 太假的不要，干扰数据，净资产本季报之后发生变化>1.1的排除
             non_finacial = non_finacial.loc[(non_finacial.equity2_pb7 < 11) & (non_finacial.equity_rejust < 1.1) & (non_finacial.roe_year_pb7_pb < 11)]
-            st = non_finacial.loc[:, ['equity2_pb7_pb', 'equity3_pb7_pb', 'roe_half_year_pb7_pb', 'roe_year_pb7_pb']].describe([.25, .5, .75, .85, .95]).T.reset_index(level=0)
-            st.columns = ['category', 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per75', 'per85', 'per95', 'max']
+            st = non_finacial.loc[:, ['equity2_pb7_pb', 'equity3_pb7_pb', 'roe_half_year_pb7_pb', 'roe_year_pb7_pb']].describe([.25, .5, .85, .90, .95]).T.reset_index(level=0)
+            st.columns = ['category', 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per85', 'per90', 'per95', 'max']
             st.loc[:, 'statype'] = 'non_finacial'
             st.index = [df.name] * 4
 
@@ -207,8 +220,8 @@ class simpleValued:
             cu[cu - (median - mad * 3 * 1.4826) < 0] = np.array((median - mad * 3 * 1.4826).tolist() * cu.shape[0]).reshape((cu.shape[0], cu.columns.size))
             cu[cu - (median + mad * 3 * 1.4826) > 0] = np.array((median + mad * 3 * 1.4826).tolist() * cu.shape[0]).reshape((cu.shape[0], cu.columns.size))
 
-            st2 = cu.describe([.25, .5, .75, .85, .95]).T.reset_index(level=0)
-            st2.columns = ['category', 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per75', 'per85', 'per95', 'max']
+            st2 = cu.describe([.25, .5, .85, .90, .95]).T.reset_index(level=0)
+            st2.columns = ['category', 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per85', 'per90', 'per95', 'max']
             st2.loc[:, 'statype'] = 'non_finacial'
             st2.index = [df.name] * 4
             st2.category = st2.category + '_mad'
@@ -222,31 +235,33 @@ class simpleValued:
         dailymarket = basic.groupby('trade_date').apply(_dailystat)
 
 
-        def _top5(df,dailymarket):
-            '''equity2_pb7  2年净资产增速对应pb, /实际pb 得出价值倍数，找出价值倍数大于95%数据，这个指标十有八九不靠谱,还不如用roe_year_pb7'''
+        def _top10(df,dailymarket):
+            '''equity2_pb7  2年净资产增速对应pb, /实际pb 得出价值倍数，找出价值倍数大于95%数据，这个指标十有八九不靠谱,还不如用roe_year_pb7
+                df.equity2_pb7 / df.pb 预计涨幅
+            '''
             if df.name in dailymarket.index.levels[0]:
                 dailymarket = dailymarket.loc[df.name]
                 if (dailymarket[dailymarket.statype == 'non_finacial'].shape[0] == 0):
                     print(dailymarket)
                 else:
                     dailymarket = dailymarket[dailymarket.statype == 'non_finacial']
-                    df.loc[:, 'buy'] = df.equity2_pb7 / df.pb - dailymarket[dailymarket.category == 'equity2_pb7_pb'].per95[0]
-                    df.loc[:, 'sell'] = dailymarket[dailymarket.category == 'equity2_pb7_pb'].per95[0] - df.equity2_pb7 / df.pb - 0.3
-                    df.loc[:, 'roe_buy'] = df.roe_year_pb7 / df.pb - dailymarket[dailymarket.category == 'roe_year_pb7_pb'].per95[0]
-                    df.loc[:, 'roe_sell'] = dailymarket[dailymarket.category == 'roe_year_pb7_pb'].per95[0] - df.roe_year_pb7 / df.pb - 0.3
-                    df.loc[:, 'half_roe_buy'] = df.roe_half_year_pb7 / df.pb - dailymarket[dailymarket.category == 'roe_half_year_pb7_pb'].per95[0]
-                    df.loc[:, 'half_roe_sell'] = dailymarket[dailymarket.category == 'roe_half_year_pb7_pb'].per95[0] - df.roe_half_year_pb7 / df.pb - 0.3
+                    df.loc[:, 'buy'] = df.equity2_pb7 / df.pb - dailymarket[dailymarket.category == 'equity2_pb7_pb'].per90[0]
+                    df.loc[:, 'sell'] = dailymarket[dailymarket.category == 'equity2_pb7_pb'].per90[0] - df.equity2_pb7 / df.pb - 0.3
+                    df.loc[:, 'roe_buy'] = df.roe_year_pb7 / df.pb - dailymarket[dailymarket.category == 'roe_year_pb7_pb'].per90[0]
+                    df.loc[:, 'roe_sell'] = dailymarket[dailymarket.category == 'roe_year_pb7_pb'].per90[0] - df.roe_year_pb7 / df.pb - 0.3
+                    df.loc[:, 'half_roe_buy'] = df.roe_half_year_pb7 / df.pb - dailymarket[dailymarket.category == 'roe_half_year_pb7_pb'].per90[0]
+                    df.loc[:, 'half_roe_sell'] = dailymarket[dailymarket.category == 'roe_half_year_pb7_pb'].per90[0] - df.roe_half_year_pb7 / df.pb - 0.3
 
-                    df.loc[:, 'buy_mad'] = df.equity2_pb7 / df.pb - dailymarket[dailymarket.category == 'equity2_pb7_pb_mad'].per95[0]
-                    df.loc[:, 'sell_mad'] = dailymarket[dailymarket.category == 'equity2_pb7_pb_mad'].per95[0] - df.equity2_pb7 / df.pb - 0.3
-                    df.loc[:, 'roe_buy_mad'] = df.roe_year_pb7 / df.pb - dailymarket[dailymarket.category == 'roe_year_pb7_pb_mad'].per95[0]
-                    df.loc[:, 'roe_sell_mad'] = dailymarket[dailymarket.category == 'roe_year_pb7_pb_mad'].per95[0] - df.roe_year_pb7 / df.pb - 0.3
-                    df.loc[:, 'half_roe_buy_mad'] = df.roe_half_year_pb7 / df.pb - dailymarket[dailymarket.category == 'roe_half_year_pb7_pb_mad'].per95[0]
-                    df.loc[:, 'half_roe_sell_mad'] = dailymarket[dailymarket.category == 'roe_half_year_pb7_pb_mad'].per95[0] - df.roe_half_year_pb7 / df.pb - 0.3
+                    df.loc[:, 'buy_mad'] = df.equity2_pb7 / df.pb - dailymarket[dailymarket.category == 'equity2_pb7_pb_mad'].per90[0]
+                    df.loc[:, 'sell_mad'] = dailymarket[dailymarket.category == 'equity2_pb7_pb_mad'].per90[0] - df.equity2_pb7 / df.pb - 0.3
+                    df.loc[:, 'roe_buy_mad'] = df.roe_year_pb7 / df.pb - dailymarket[dailymarket.category == 'roe_year_pb7_pb_mad'].per90[0]
+                    df.loc[:, 'roe_sell_mad'] = dailymarket[dailymarket.category == 'roe_year_pb7_pb_mad'].per90[0] - df.roe_year_pb7 / df.pb - 0.3
+                    df.loc[:, 'half_roe_buy_mad'] = df.roe_half_year_pb7 / df.pb - dailymarket[dailymarket.category == 'roe_half_year_pb7_pb_mad'].per90[0]
+                    df.loc[:, 'half_roe_sell_mad'] = dailymarket[dailymarket.category == 'roe_half_year_pb7_pb_mad'].per90[0] - df.roe_half_year_pb7 / df.pb - 0.3
                     return df
 
-        print(basic.loc[:,['ts_code','trade_date']].head())
-        return basic.groupby('trade_date',as_index=False).apply(_top5,dailymarket=dailymarket).set_index(['trade_date', 'ts_code'],drop=False)
+        #print(basic.loc[:,['ts_code','trade_date']].head())
+        return basic.groupby('trade_date',as_index=False).apply(_top10,dailymarket=dailymarket).set_index(['trade_date', 'ts_code'],drop=False)
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
 
 
@@ -330,8 +345,8 @@ class simpleValued:
             d[d - (median - mad * 3 * 1.4826) < 0] = np.array((median - mad * 3 * 1.4826).tolist()*d.shape[0]).reshape((d.shape[0],d.columns.size))
             d[d - (median + mad * 3 * 1.4826) > 0] = np.array((median + mad * 3 * 1.4826).tolist()*d.shape[0]).reshape((d.shape[0],d.columns.size))
 
-            st2 = d.describe([.25, .5, .75, .85, .95]).T.reset_index(level=0)
-            st2.columns = ['category', 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per75', 'per85', 'per95', 'max']
+            st2 = d.describe([.25, .5, .85, .90, .95]).T.reset_index(level=0)
+            st2.columns = ['category', 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per85', 'per90', 'per95', 'max']
             st2.index = [df.name] * 9
             st2.category = st2.category+'_mad'
             return pd.concat([st, st2])
@@ -341,16 +356,16 @@ class simpleValued:
         def _top10(df,dailymarket):
             if df.name in dailymarket.index.levels[0]:
                 dailymarket = dailymarket.loc[df.name]
-                df.loc[:, 'industry_roe_buy'] = df.industry_roe - dailymarket[dailymarket.category == 'industry_roe'].per95[0]
+                df.loc[:, 'industry_roe_buy'] = df.industry_roe - dailymarket[dailymarket.category == 'industry_roe'].per90[0]
                 df.loc[:, 'industry_pe_buy'] = df.industry_pe - dailymarket[dailymarket.category == 'industry_pe'].per85[0]
                 df.loc[:, 'q_dtprofit_poly'] = df.q_dtprofit_poly - dailymarket[dailymarket.category == 'q_dtprofit_poly'].per85[0]
-                df.loc[:, 'industry_roe_ttm_buy'] = df.roe_ttm - dailymarket[dailymarket.category == 'roe_ttm'].per95[0]
+                df.loc[:, 'industry_roe_ttm_buy'] = df.roe_ttm - dailymarket[dailymarket.category == 'roe_ttm'].per90[0]
                 df.loc[:, 'industry_pe_ttm_buy'] = df.industry_pe_ttm - dailymarket[dailymarket.category == 'industry_pe_ttm'].per85[0]
                 df.loc[:, 'q_dtprofit_ttm_poly'] = df.q_dtprofit_ttm_poly - dailymarket[dailymarket.category == 'q_dtprofit_ttm_poly'].per85[0]
-                df.loc[:, 'industry_roe_buy_mad'] = df.industry_roe - dailymarket[dailymarket.category == 'industry_roe_mad'].per95[0]
+                df.loc[:, 'industry_roe_buy_mad'] = df.industry_roe - dailymarket[dailymarket.category == 'industry_roe_mad'].per90[0]
                 df.loc[:, 'industry_pe_buy_mad'] = df.industry_pe - dailymarket[dailymarket.category == 'industry_pe_mad'].per85[0]
                 df.loc[:, 'q_dtprofit_poly_mad'] = df.q_dtprofit_poly - dailymarket[dailymarket.category == 'q_dtprofit_poly_mad'].per85[0]
-                df.loc[:, 'industry_roe_ttm_buy_mad'] = df.roe_ttm - dailymarket[dailymarket.category == 'roe_ttm_mad'].per95[0]
+                df.loc[:, 'industry_roe_ttm_buy_mad'] = df.roe_ttm - dailymarket[dailymarket.category == 'roe_ttm_mad'].per90[0]
                 df.loc[:, 'industry_pe_ttm_buy_mad'] = df.industry_pe_ttm - dailymarket[dailymarket.category == 'industry_pe_ttm_mad'].per85[0]
                 df.loc[:, 'q_dtprofit_ttm_poly_mad'] = df.q_dtprofit_ttm_poly - dailymarket[dailymarket.category == 'q_dtprofit_ttm_poly_mad'].per85[0]
                 return df
