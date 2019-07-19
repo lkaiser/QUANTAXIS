@@ -251,7 +251,7 @@ class simpleValued:
             data = df
             for k in rms:
                 data = data[~((data.trade_date >= k[0]) & (data.trade_date < k[1]))]
-                return data
+            return data
 
         basic = basic.groupby('ts_code',as_index=False).apply(_af_fiter)
 

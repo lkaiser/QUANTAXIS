@@ -26,7 +26,6 @@ list(map(lambda x: p.add(StructField(x, DoubleType())), p_struct))
 
 @pandas_udf(p, PandasUDFType.GROUPED_MAP)
 def _ver_indicator(data):
-    import talib
     if (data['q_dt_roe'].isnull().all()):
         roe_half_year = roe_year = np.array([np.nan] * data.shape[0])
     else:
