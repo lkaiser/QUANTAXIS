@@ -246,7 +246,6 @@ class simpleValued:
             if not rm:
                 rms.append((rm, self.end))
                 rm = None
-
             data = df
             for k in rms:
                 data = data[~((data.trade_date >= k[0]) & (data.trade_date < k[1]))]
