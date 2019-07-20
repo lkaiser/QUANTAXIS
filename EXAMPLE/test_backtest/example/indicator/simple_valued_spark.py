@@ -360,15 +360,15 @@ class simpleValued:
                     print(dmt)
                 else:
                     dm = dmt[dmt.statype == 'non_finacial']
-                    df.loc[:, 'roe_buy'] = df.roe_year_pb7 / df.pb - dm[dm.category == 'roe_year_pb7_pb'].per90
-                    df.loc[:, 'roe_sell'] = dm[dm.category == 'roe_year_pb7_pb'].per90 - df.roe_year_pb7 / df.pb - 0.3
-                    df.loc[:, 'half_roe_buy'] = df.roe_half_year_pb7 / df.pb - dm[dm.category == 'roe_half_year_pb7_pb'].per90
-                    df.loc[:, 'half_roe_sell'] = dm[dm.category == 'roe_half_year_pb7_pb'].per90 - df.roe_half_year_pb7 / df.pb - 0.3
+                    df.loc[:, 'roe_buy'] = df.roe_year_pb7 / df.pb - dm[dm.category == 'roe_year_pb7_pb'].per90.values[0]
+                    df.loc[:, 'roe_sell'] = dm[dm.category == 'roe_year_pb7_pb'].per90.values[0] - df.roe_year_pb7 / df.pb - 0.3
+                    df.loc[:, 'half_roe_buy'] = df.roe_half_year_pb7 / df.pb - dm[dm.category == 'roe_half_year_pb7_pb'].per90.values[0]
+                    df.loc[:, 'half_roe_sell'] = dm[dm.category == 'roe_half_year_pb7_pb'].per90.values[0] - df.roe_half_year_pb7 / df.pb - 0.3
 
-                    df.loc[:, 'roe_buy_mad'] = df.roe_year_pb7 / df.pb - dm[dm.category == 'roe_year_pb7_pb_mad'].per90
-                    df.loc[:, 'roe_sell_mad'] = dm[dm.category == 'roe_year_pb7_pb_mad'].per90 - df.roe_year_pb7 / df.pb - 0.3
-                    df.loc[:, 'half_roe_buy_mad'] = df.roe_half_year_pb7 / df.pb - dm[dm.category == 'roe_half_year_pb7_pb_mad'].per90
-                    df.loc[:, 'half_roe_sell_mad'] = dm[dm.category == 'roe_half_year_pb7_pb_mad'].per90 - df.roe_half_year_pb7 / df.pb - 0.3
+                    df.loc[:, 'roe_buy_mad'] = df.roe_year_pb7 / df.pb - dm[dm.category == 'roe_year_pb7_pb_mad'].per90.values[0]
+                    df.loc[:, 'roe_sell_mad'] = dm[dm.category == 'roe_year_pb7_pb_mad'].per90.values[0] - df.roe_year_pb7 / df.pb - 0.3
+                    df.loc[:, 'half_roe_buy_mad'] = df.roe_half_year_pb7 / df.pb - dm[dm.category == 'roe_half_year_pb7_pb_mad'].per90.values[0]
+                    df.loc[:, 'half_roe_sell_mad'] = dm[dm.category == 'roe_half_year_pb7_pb_mad'].per90.values[0] - df.roe_half_year_pb7 / df.pb - 0.3
             return df
 
         #print(basic.loc[:,['ts_code','trade_date']].head())
@@ -497,18 +497,18 @@ class simpleValued:
             df = pd.concat([df2, pd.DataFrame(columns=add3_struct, dtype='float')])
             market = dailymarket[dailymarket.industry == key[0]]
             if market.shape[0]:
-                df.loc[:, 'industry_roe_buy'] = df.industry_roe - market[market.category == 'industry_roe'].per90
-                df.loc[:, 'industry_pe_buy'] = df.industry_pe - market[market.category == 'industry_pe'].per85
-                df.loc[:, 'q_dtprofit_poly_buy'] = df.q_dtprofit_poly - market[market.category == 'q_dtprofit_poly'].per85
-                df.loc[:, 'industry_roe_ttm_buy'] = df.roe_ttm - market[market.category == 'roe_ttm'].per90
-                df.loc[:, 'industry_pe_ttm_buy'] = df.industry_pe_ttm - market[market.category == 'industry_pe_ttm'].per85
-                df.loc[:, 'q_dtprofit_ttm_poly_buy'] = df.q_dtprofit_ttm_poly - market[market.category == 'q_dtprofit_ttm_poly'].per85
-                df.loc[:, 'industry_roe_buy_mad'] = df.industry_roe - market[market.category == 'industry_roe_mad'].per90
-                df.loc[:, 'industry_pe_buy_mad'] = df.industry_pe - market[market.category == 'industry_pe_mad'].per85
-                df.loc[:, 'q_dtprofit_poly_buy_mad'] = df.q_dtprofit_poly - market[market.category == 'q_dtprofit_poly_mad'].per85
-                df.loc[:, 'industry_roe_ttm_buy_mad'] = df.roe_ttm - market[market.category == 'roe_ttm_mad'].per90
-                df.loc[:, 'industry_pe_ttm_buy_mad'] = df.industry_pe_ttm - market[market.category == 'industry_pe_ttm_mad'].per85
-                df.loc[:, 'q_dtprofit_ttm_poly_buy_mad'] = df.q_dtprofit_ttm_poly - market[market.category == 'q_dtprofit_ttm_poly_mad'].per85
+                df.loc[:, 'industry_roe_buy'] = df.industry_roe - market[market.category == 'industry_roe'].per90.values[0]
+                df.loc[:, 'industry_pe_buy'] = df.industry_pe - market[market.category == 'industry_pe'].per85.values[0]
+                df.loc[:, 'q_dtprofit_poly_buy'] = df.q_dtprofit_poly - market[market.category == 'q_dtprofit_poly'].per85.values[0]
+                df.loc[:, 'industry_roe_ttm_buy'] = df.roe_ttm - market[market.category == 'roe_ttm'].per90.values[0]
+                df.loc[:, 'industry_pe_ttm_buy'] = df.industry_pe_ttm - market[market.category == 'industry_pe_ttm'].per85.values[0]
+                df.loc[:, 'q_dtprofit_ttm_poly_buy'] = df.q_dtprofit_ttm_poly - market[market.category == 'q_dtprofit_ttm_poly'].per85.values[0]
+                df.loc[:, 'industry_roe_buy_mad'] = df.industry_roe - market[market.category == 'industry_roe_mad'].per90.values[0]
+                df.loc[:, 'industry_pe_buy_mad'] = df.industry_pe - market[market.category == 'industry_pe_mad'].per85.values[0]
+                df.loc[:, 'q_dtprofit_poly_buy_mad'] = df.q_dtprofit_poly - market[market.category == 'q_dtprofit_poly_mad'].per85.values[0]
+                df.loc[:, 'industry_roe_ttm_buy_mad'] = df.roe_ttm - market[market.category == 'roe_ttm_mad'].per90.values[0]
+                df.loc[:, 'industry_pe_ttm_buy_mad'] = df.industry_pe_ttm - market[market.category == 'industry_pe_ttm_mad'].per85.values[0]
+                df.loc[:, 'q_dtprofit_ttm_poly_buy_mad'] = df.q_dtprofit_ttm_poly - market[market.category == 'q_dtprofit_ttm_poly_mad'].per85.values[0]
             return df
             #pass
 

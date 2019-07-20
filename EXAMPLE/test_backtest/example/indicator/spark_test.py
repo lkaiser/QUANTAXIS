@@ -78,21 +78,27 @@ def _ver_indicator(data):
 fin_spark.groupby('ts_code').apply(_ver_indicator).toPandas()
 
 
-@pandas_udf(fin_spark.schema, PandasUDFType.GROUPED_MAP)
-def _ver_indicator(data):
-    from statsmodels import api as sm, regression
-    gs = data.q_gsprofit_margin[0:3].append(data.q_gsprofit_margin)  # 凑够长度，反正前几条数据也没有计算意义
-    gs = gs.fillna(method='bfill')
-    gs = gs.fillna(method='pad')
+@pandas_udf(stock_spark.schema, PandasUDFType.GROUPED_MAP)
+def _ver_indicator(key,data):
+    t = data[data.ts_code=='000066.SZ']
+    #print(type(t))
+    if len(t) >0 :
+        print(type(t))
+        print(t.name.values[0])
+    #from statsmodels import api as sm, regression
+    #gs = data.q_gsprofit_margin[0:3].append(data.q_gsprofit_margin)  # 凑够长度，反正前几条数据也没有计算意义
+    #gs = gs.fillna(method='bfill')
+    #gs = gs.fillna(method='pad')
     # RegUtil.calc_regress_deg(gs[0:4], show=False)
-    x = np.arange(0, 4)
-    x = sm.add_constant(x)
-    model = regression.linear_model.OLS(gs[0:4], x).fit()
+    #x = np.arange(0, 4)
+    #x = sm.add_constant(x)
+    #model = regression.linear_model.OLS(gs[0:4], x).fit()
     # for i in range(data.q_gsprofit_margin.shape[0]):
     return data
 
 
 fin_spark.groupby('ts_code').apply(_ver_indicator).toPandas()
+stock_spark.groupby('industry').apply(_ver_indicator).toPandas()
 
 
 def _ver_indicator2(data):
