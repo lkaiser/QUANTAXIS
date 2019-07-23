@@ -37,10 +37,12 @@ class simpleValuedSeason:
         #
         #DATA = pro.QA_SU_save_stock_daily(code, start, end)
         # todo 计算信号
+
         sv = simpleValued(start,end)
         stock_signal = sv.simpleStrategy()
         stock_signal.loc[:,'open'] = stock_signal.loc[:,'high'] = stock_signal.loc[:,'low'] = stock_signal['close']
         stock_signal.loc[:,'vol'] = 10000000
+        print(stock_signal.dtypes)
         stock_signal.loc[:,'date'] = stock_signal['trade_date'].str[0:4]+'-'+stock_signal['trade_date'].str[4:6]+'-'+stock_signal['trade_date'].str[6:8]#['trade_date']
         #print(stock_signal.columns)
         #stock_signal.loc[:, 'code'] = stock_signal['ts_code']

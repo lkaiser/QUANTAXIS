@@ -28,18 +28,20 @@ class simpleValued:
     def __init__(self,start,end):
         self.start = start
         self.end = end
-        self.basic_temp_name = 'basic_temp_' +start+'_'+end +'.pkl'
-        start_2years_bf = str(int(start[0:4]) - 3)
-        self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
-        self.income = pro.QA_fetch_get_income(start=start_2years_bf, end=end)
-        self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
-        basic = pro.QA_fetch_get_dailyindicator(start=start, end=end).sort_values(['ts_code','trade_date'], ascending = True)
-        self.basic = spark.createDataFrame(basic)
-        self.basic.repartition('ts_code')
-        self.basic.cache()
-        self.stock = pro.QA_SU_stock_info()
-        self.dailymarket = None
-        self.industry = None
+        self.basic_temp_name = '/usr/local/spark/basic_temp_' +start+'_'+end +'.csv'
+        if not (os.path.isfile(self.basic_temp_name)):
+            start_2years_bf = str(int(start[0:4]) - 3)
+            self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
+            self.income = pro.QA_fetch_get_income(start=start_2years_bf, end=end)
+            self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
+            basic = pro.QA_fetch_get_dailyindicator(start=start, end=end).sort_values(['ts_code','trade_date'], ascending = True)
+            self.basic = spark.createDataFrame(basic)
+            self.basic.repartition('ts_code')
+            self.basic.cache()
+            self.stock = pro.QA_SU_stock_info()
+            self.dailymarket = None
+            self.industry = None
+
 
     def indcators_prepare(self,basic):
         """
@@ -59,7 +61,7 @@ class simpleValued:
             :param data:
             :return:
             '''
-            data = data.sort_values(by='trade_date')
+            #data = data.sort_values(by='trade_date')
             if (data['q_dt_roe'].isnull().all()):
                 roe_half_year = roe_year = np.array([np.nan] * data.shape[0])
             else:
@@ -303,7 +305,7 @@ class simpleValued:
             non_finacial.loc[:, 'roe_half_year_pb7_pb'] = np.round(non_finacial.loc[:, 'roe_half_year_pb7'] / non_finacial.loc[:, 'pb'], 3)
             non_finacial.loc[:, 'roe_year_pb7_pb'] = np.round(non_finacial.loc[:, 'roe_year_pb7'] / non_finacial.loc[:, 'pb'], 3)
             # 太假的不要，干扰数据，净资产本季报之后发生变化>1.1的排除
-            non_finacial = non_finacial.loc[(non_finacial.equity2_pb7 < 11) & (non_finacial.equity_rejust < 1.1) & (non_finacial.roe_year_pb7_pb < 11)]
+            non_finacial = non_finacial.loc[(non_finacial.roe_year_pb7_pb < 11)]
             st = non_finacial.loc[:, ['roe_half_year_pb7_pb', 'roe_year_pb7_pb']].describe([.25, .5, .85, .90, .95]).T.reset_index(level=0)
             st.columns = columns
             st.loc[:, 'statype'] = 'non_finacial'
@@ -342,7 +344,7 @@ class simpleValued:
         # print(dailymarket2.head(2))
         #dailymarket.to_csv('/usr/local/spark/dailymarket-2018.csv')
 
-        add_struct = ['buy', 'sell', 'roe_buy', 'roe_sell', 'half_roe_buy',
+        add_struct = [ 'roe_buy', 'roe_sell', 'half_roe_buy',
                       'half_roe_sell', 'buy_mad', 'sell_mad', 'roe_buy_mad', 'roe_sell_mad',
                       'half_roe_buy_mad', 'half_roe_sell_mad']
         p2 = copy.deepcopy(basic.schema)
@@ -514,6 +516,12 @@ class simpleValued:
 
         return df.groupby('trade_date').apply(_top10)
 
+    def simpleStrategy(self):
+        df = pd.read_csv(self.basic_temp_name).set_index(['trade_date', 'ts_code'], drop=False)
+        df.loc[:, 'buy'] = (df.roe_buy > 0) & (df.half_roe_buy > df.roe_buy) & (df.industry_roe_buy > 0 & (df.roe_yearly > 10) & (df.opincome_of_ebt > 85) & (df.debt_to_assets < 70))
+        df.loc[:, 'sell'] = df.roe_sell > 0
+        return df
+
 
 if __name__ == '__main__':
     #logger = logging.getLogger('__FILE__')
@@ -537,6 +545,7 @@ if __name__ == '__main__':
     # basic = spark.createDataFrame(basic)
     df = sv.industry_trend_top10(df)
     df2 = df.toPandas()
+    df2.set_index(['trade_date', 'ts_code'], drop=False)
     df2.to_csv('/usr/local/spark/result.csv')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
     # finacial = pd.read_csv('/usr/local/spark/finace-2018.csv')

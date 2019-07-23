@@ -13,20 +13,18 @@ class simpleValued:
     def __init__(self,start,end):
         self.start = start
         self.end = end
-        self.basic_temp_name = 'basic_temp_' +start+'_'+end +'.pkl'
-        start_2years_bf = str(int(start[0:4]) - 3)
-        self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
-        self.income = pro.QA_fetch_get_income(start=start_2years_bf, end=end)
-        self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
-        if (os.path.isfile(self.basic_temp_name)):
-            self.basic = pd.read_pickle(self.basic_temp_name)
-        else:
+        self.basic_temp_name = 'C:\\Users\\liaokai\\Documents\\GitHub\\QUANTAXIS\\EXAMPLE\\test_backtest\\example\\indicator\\basic_temp_' +start+'_'+end +'.csv'
+        if not (os.path.isfile(self.basic_temp_name)):
+            start_2years_bf = str(int(start[0:4]) - 3)
+            self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
+            self.income = pro.QA_fetch_get_income(start=start_2years_bf, end=end)
+            self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
             basic = pro.QA_fetch_get_dailyindicator(start=start,end=end)
-            #print(basic.head().loc[:,['ts_code','trade_date','close','pe']])
+                #print(basic.head().loc[:,['ts_code','trade_date','close','pe']])
             self.basic = basic.sort_values(['ts_code','trade_date'], ascending = True)
-        self.stock = pro.QA_SU_stock_info()
-        self.dailymarket = None
-        self.industry = None
+            self.stock = pro.QA_SU_stock_info()
+            self.dailymarket = None
+            self.industry = None
 
 
     def indcators_prepare(self,basic):
@@ -433,15 +431,7 @@ class simpleValued:
         return df.groupby('trade_date', as_index=False).apply(_top10, dailymarket=dailymarket).set_index(['trade_date', 'ts_code'], drop=False)
 
     def simpleStrategy(self):
-        #print(os.path.abspath(__file__))
-        file = os.path.join(os.path.dirname(os.path.abspath(__file__)),'test.pkl')
-        print(file)
-        if (os.path.isfile(file)):
-            df = pd.read_pickle(file)
-        else:
-            df = self.non_finacal_top5_valued()
-            df = self.industry_trend_top10(df)
-            df.to_pickle(file)
+        df = pd.read_csv(self.basic_temp_name,dtype={'trade_date':str,'circ_mv':np.float32}).set_index(['trade_date', 'ts_code'], drop=False)
         df.loc[:,'buy'] = (df.roe_buy>0) & (df.half_roe_buy>df.roe_buy) & (df.industry_roe_buy>0 &(df.roe_yearly>10) &(df.opincome_of_ebt>85) &(df.debt_to_assets<70))
         df.loc[:,'sell'] = df.roe_sell>0
         #stock_signal = pd.read_pickle('test.pkl')
