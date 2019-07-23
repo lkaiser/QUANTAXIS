@@ -431,6 +431,7 @@ class simpleValued:
         return df.groupby('trade_date', as_index=False).apply(_top10, dailymarket=dailymarket).set_index(['trade_date', 'ts_code'], drop=False)
 
     def simpleStrategy(self):
+
         df = pd.read_csv(self.basic_temp_name,dtype={'trade_date':str,'circ_mv':np.float32}).set_index(['trade_date', 'ts_code'], drop=False)
         df.loc[:,'buy'] = (df.roe_buy>0) & (df.half_roe_buy>df.roe_buy) & (df.industry_roe_buy>0 &(df.roe_yearly>10) &(df.opincome_of_ebt>85) &(df.debt_to_assets<70))
         df.loc[:,'sell'] = df.roe_sell>0
