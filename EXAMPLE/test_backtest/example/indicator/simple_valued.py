@@ -438,6 +438,12 @@ class simpleValued:
         #print(df.head())
         return df
 
+    def regression(self,df):
+        med = df.roe_buy.median()
+        df.loc[:, 'buy'] = (df.roe_buy > med) & (df.half_roe_buy > df.roe_buy) & (df.industry_roe_buy_mad > 0) & (
+                    df.roe_yearly > 10) & (df.opincome_of_ebt > 85) & (df.debt_to_assets < 70)
+        #计算未来3,6个月的最大涨幅，总共也就1年的数据，可以拿1,4,7,这3个月做未来3月涨幅回归，1,6 这2个月做未来6个月涨幅回归
+
 
 
 
