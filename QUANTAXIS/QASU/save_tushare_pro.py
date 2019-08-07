@@ -1196,13 +1196,13 @@ adj_factor	float	复权因子
         return
     report_income = client.stock_daily_adj_tushare
     print("##################get mainbz reports start####################")
-    for i_ in range(len(df.index)):
+    for i_ in range(3520,len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
-        print('UPDATE stock daily adj Trying updating %s from %s to %s' % (df.iloc[i_].ts_code))
-        time.sleep(1)
+        #print('UPDATE stock daily adj Trying updating %s from %s to %s' % (df.iloc[i_].ts_code,start_day,datetime.datetime.now()))
+        time.sleep(0.4)
         try:
             income = pro.adj_factor(ts_code=df.iloc[i_].ts_code)
         except Exception as e:
@@ -1440,9 +1440,11 @@ if __name__ == '__main__':
     # QA_SU_save_stock_report_assetliability(start_day='20190101')
     # QA_SU_save_stock_report_income(start_day='20190101')
     # QA_SU_save_stock_report_cashflow(start_day='20190101')
+    print('##############start###############')
+    QA_SU_save_stock_adj_factor(start_day='20050101')
 
 
-    QA_SU_save_industry_indicator(start_day='20050101')
+    #QA_SU_save_industry_indicator(start_day='20050101')
     #print(pd.date_range('20170331','20171231',freq='Q-DEC').strftime('%Y%m%d'))
     #result = []
     # def when_done(r):
