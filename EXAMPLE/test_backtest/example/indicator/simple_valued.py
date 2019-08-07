@@ -442,6 +442,23 @@ class simpleValued:
         med = df.roe_buy.median()
         df.loc[:, 'buy'] = (df.roe_buy > med) & (df.half_roe_buy > df.roe_buy) & (df.industry_roe_buy_mad > 0) & (
                     df.roe_yearly > 10) & (df.opincome_of_ebt > 85) & (df.debt_to_assets < 70)
+
+        def _first(df):
+            df = sort_values(['trade_date'], ascending=True)
+            return df.iloc[0]
+        first = df[df.buy &(df.trade_date>20180101) &(df.trade_date<20180210)].groupby('ts_code',as_index=False).apply(_first)
+        basic = self.basic[self.basic.ts_code.isin(first.ts_code.values) &(df.trade_date<20180530)]
+
+        def _max(df,basic):
+            b = basic[(basic.ts_code==df.name) & (basic.trade_date>df.iloc[0].trade_date)]
+            if(b.shape[0]):
+                df.iloc[:,'adj_rate'] = b.adj_price.max()/df.iloc[0].adj_price
+            return df
+        first.groupby.groupby('ts_code',as_index=False).apply(_max,basic=basic)
+
+
+
+
         #计算未来3,6个月的最大涨幅，总共也就1年的数据，可以拿1,4,7,这3个月做未来3月涨幅回归，1,6 这2个月做未来6个月涨幅回归
 
 
