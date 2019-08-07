@@ -6,14 +6,16 @@ import numpy as np
 import datetime
 import os
 from QUANTAXIS.ML import RegUtil
+import time
 #pd.set_option('display.float_format', lambda x: '%.3f' % x)
 #pd.set_option('display.max_columns',5, 'display.max_rows', 100)
 class simpleValued:
 
+
     def __init__(self,start,end):
         self.start = start
         self.end = end
-        self.basic_temp_name = 'C:\\Users\\liaokai\\Documents\\GitHub\\QUANTAXIS\\EXAMPLE\\test_backtest\\example\\indicator\\basic_temp_' +start+'_'+end +'.csv'
+        self.basic_temp_name = 'D:\\work\\QUANTAXIS\EXAMPLE\\test_backtest\\example\\indicator\\basic_temp_' +start+'_'+end +'.csv'
         if not (os.path.isfile(self.basic_temp_name)):
             start_2years_bf = str(int(start[0:4]) - 3)
             self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
@@ -165,17 +167,9 @@ class simpleValued:
         #  basic 日交易基本数据
         # 增加 equity2_pb7、equity3_pb7、roe_year_pb7等几列指标,_indicatorCp运算时间过长，要20多分钟，需要
         # 对中间结果加以保存,后续考虑通过并发框架实施
-        if not (os.path.isfile(self.basic_temp_name)):
-            # basic.loc[:, ] = 0
-            # basic.loc[:, 'equity3_pb7'] = 0
-            # basic.loc[:, 'roe_year_pb7'] = 0
-            # basic.loc[:, 'roe_half_year_pb7'] = 0
-            # basic.loc[:, 'equity_rejust'] = 0
-            df = basic.groupby('ts_code').apply(_indicatorCp)
-            df.to_pickle(self.basic_temp_name)
-            return df
-        else:
-            return pd.read_pickle(self.basic_temp_name)
+        df = basic.groupby('ts_code').apply(_indicatorCp)
+        df.to_pickle(self.basic_temp_name)
+        return df
 
     def non_finacal_top5_valued(self,data=None):
         """
@@ -223,7 +217,7 @@ class simpleValued:
             if ast.shape[0]:
                 ast.loc[:, 'rmflag'] = 0
                 ast.loc[ast.goodwill / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 商誉占比
-                ast.loc[ast.inventories / ast.total_hldr_eqy_exc_min_int > 0.3,'rmflag'] = 1  # 存货占比
+                ast.loc[ast.inventories / ast.total_hldr_eqy_exc_min_int > 0.25,'rmflag'] = 1  # 存货占比
                 ast.loc[(ast.notes_receiv + ast.accounts_receiv) / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 应收占比
 
             for i in range(ast.shape[0]): #举例 20171231 0; 20180331  1;20180630  1;20180930 0;20181231 1  ,则  20180331-20180930之间,20181231-end之间的全删除
@@ -323,6 +317,10 @@ class simpleValued:
 
 
     def industry_trend_top10(self,data):
+        """
+                行业判断指标，增加行业roe、pe、收益等指标的趋势判断,单只股票的趋势不具备代表性，行业的趋势则表明整体行环境。
+                选取整体行业趋势向好的个股，具有更高胜率
+                """
         start_3years_bf = str(int(self.start[0:4]) - 3)+self.start[4:8]
         industry_daily = pro.QA_fetch_get_industry_daily(start=start_3years_bf, end=self.end).sort_values(['industry','trade_date'], ascending = True)
         def _trend(data):
@@ -363,11 +361,11 @@ class simpleValued:
                         resampledf = resampledf.append(t)
                 resample = resampledf.append(list(map(_lam_f, [item.trade_date], [data])))#每次循环最新一天都要替换，所以最新一天不能赋值给 resampledf,只能给resample
                 resample = resample.dropna(how='all')
-                ind = -8 if resample.shape[0]>8 else -resample.shape[0]
+                ind = -8 if resample.shape[0]>8 else -resample.shape[0]  #默认拟合8条也就是2年数据（不太可能超过2年，行业季度数据不会丢失，个股有可能），没达到2年有多少取多少
                 #print(resample.loc[:, ['industry', 'trade_date', 'q_dtprofit']].head())
                 # fit, p1 = RegUtil.regress_y_polynomial(resample[-8:].q_gr_ttm, poly=3, show=False)
                 # fit, p2 = RegUtil.regress_y_polynomial(resample[-8:].q_profit_ttm, poly=3, show=False)
-                fit, p3 = RegUtil.regress_y_polynomial(resample[ind:].q_dtprofit_ttm, poly=3, show=False)
+                fit, p3 = RegUtil.regress_y_polynomial(resample[ind:].q_dtprofit_ttm, poly=3, show=False)  #p3 ..p8都是拟合曲线导数，计算pn(abs(ind)) 即可获取最新一季度趋势
                 # fit, p4 = RegUtil.regress_y_polynomial(resample[-8:].q_opincome_ttm, poly=3, show=False)
                 fit, p5 = RegUtil.regress_y_polynomial(resample[ind:].q_gr, poly=3, show=False)
                 fit, p6 = RegUtil.regress_y_polynomial(resample[ind:].q_profit, poly=3, show=False)
@@ -377,7 +375,7 @@ class simpleValued:
                 pe = item.ind_total_mv*10000/item.q_dtprofit
                 roe_ttm = item.q_dtprofit_ttm / item.total_hldr_eqy_exc_min_int
                 pe_ttm = item.ind_total_mv*10000/item.q_dtprofit_ttm
-                indicator.loc[index] = [item.trade_date,data.name,p3(8),p5(8),p6(8),p7(8),p8(8),roe,pe,roe_ttm,pe_ttm]
+                indicator.loc[index] = [item.trade_date,data.name,p3(abs(ind)),p5(abs(ind)),p6(abs(ind)),p7(abs(ind)),p8(abs(ind)),roe,pe,roe_ttm,pe_ttm] #
             return indicator
         industry_daily = industry_daily.groupby("industry",as_index=False).apply(_trend)
         df = pd.merge(data, self.stock.loc[:, ['ts_code', 'industry']], left_on='ts_code', right_on='ts_code', how="inner")  # 找到每只code的行业，剔除缺少行业的
@@ -388,8 +386,8 @@ class simpleValued:
         # 每日统计指标,数据丢失太严重，17w数据，有2.8w的q_dtprofit丢失，只好用前向或者后向填充，其他指标丢失更严重，失去统计意义
         def _dailystat(df):
             d = df.loc[:, ['q_dtprofit_ttm_poly','q_gr_poly','q_profit_poly','q_dtprofit_poly','q_opincome_poly','industry_roe','industry_pe','roe_ttm','industry_pe_ttm']]
-            st = d.describe([.25, .5, .75, .85, .95]).T.reset_index(level=0)
-            st.columns = ['category', 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per75', 'per85', 'per95', 'max']
+            st = d.describe([.25, .5, .85, .90, .95]).T.reset_index(level=0)
+            st.columns = ['category', 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per85', 'per90', 'per95', 'max']
             st.index = [df.name] * 9
 
             #mad 去极值法
@@ -433,7 +431,7 @@ class simpleValued:
     def simpleStrategy(self):
 
         df = pd.read_csv(self.basic_temp_name,dtype={'trade_date':str,'circ_mv':np.float32}).set_index(['trade_date', 'ts_code'], drop=False)
-        df.loc[:,'buy'] = (df.roe_buy>0) & (df.half_roe_buy>df.roe_buy) & (df.industry_roe_buy>0 &(df.roe_yearly>10) &(df.opincome_of_ebt>85) &(df.debt_to_assets<70))
+        df.loc[:,'buy'] = (df.roe_buy>0) & (df.half_roe_buy>df.roe_buy) & (df.industry_roe_buy_mad>0) &(df.roe_yearly>10) &(df.opincome_of_ebt>85) &(df.debt_to_assets<70)
         df.loc[:,'sell'] = df.roe_sell>0
         #stock_signal = pd.read_pickle('test.pkl')
         #df.loc[:'f_buy'] =
@@ -458,15 +456,28 @@ class simpleValued:
 
 if __name__ == '__main__':
     #finacial = pro.QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
-    print('wtf')
-    #sv  = simpleValued('20180101','20181231')
-    #sv.simpleStrategy()
 
-    finacial = pro.QA_fetch_get_finindicator(start='20150101', end='20181231')
-    #finacial.to_pickle('finace-2018.pkl')
-    finacial.to_csv('finace-2018.csv')
-    basic = pro.QA_fetch_get_dailyindicator(start='20180101', end='20181231')
-    basic.to_csv('basic-2018.csv')
+    print('wtf')
+    sv = simpleValued('20180101','20181231')
+    print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
+    df = sv.non_finacal_top5_valued()
+    df = sv.industry_trend_top10(df)
+    df.to_pickle('basic-2018.pkl')
+    df.to_csv('basic-2018.csv')
+    print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
+
+
+    #sv.simpleStrategy()
+    # fit, p = RegUtil.regress_y_polynomial([5,7,4,3.6,6,7,9,6,7], poly=3, show=True)
+    # print(fit)
+    # print(p)
+    # print(p(3))
+
+    # finacial = pro.QA_fetch_get_finindicator(start='20150101', end='20181231')
+    # #finacial.to_pickle('finace-2018.pkl')
+    # finacial.to_csv('finace-2018.csv')
+    # basic = pro.QA_fetch_get_dailyindicator(start='20180101', end='20181231')
+    # basic.to_csv('basic-2018.csv')
     #basic.to_pickle('basic-2018.pkl')
     #sv.indcators_prepare()
     # df = sv.non_finacal_top5_valued()
