@@ -448,14 +448,18 @@ class simpleValued:
             return df.iloc[0]
         first = df[df.buy &(df.trade_date>20180101) &(df.trade_date<20180210)].groupby('ts_code',as_index=False).apply(_first)
         basic = self.basic[self.basic.ts_code.isin(first.ts_code.values) &(df.trade_date<20180530)]
+        first.rename(columns={'trade_date': 'first_day','close':'f_close'}, inplace=True)
+        basic = basic.merge(first.loc[:,['ts_code','close','trade_date']],on=['ts_code'],how='inner')
 
-        def _max(df,basic):
-            b = basic[(basic.ts_code==df.name) & (basic.trade_date>df.iloc[0].trade_date)]
-            if(b.shape[0]):
-                df.iloc[:,'adj_rate'] = b.adj_price.max()/df.iloc[0].adj_price
-            return df
-        first.groupby.groupby('ts_code',as_index=False).apply(_max,basic=basic)
+        def _max(df):
+            b = df[df.trade_date>=df.first_day]
+            return pd.DataFrame({'max':b.close.max(),'min':b.close.min(),'ts_code',b.ts_code[0]})
+        basic = basic.groupby.groupby('ts_code',as_index=False).apply(_max)
+        basic = basic.merge(first,on='ts_code',how='inner')
 
+        import statsmodels.api as sm
+        y = basic.max/basic.close
+        x = basic[['roe_buy','half_roe_buy','industry_roe_buy_mad','roe_yearly','opincome_of_ebt','debt_to_assets','q_dt_roe']]
 
 
 
