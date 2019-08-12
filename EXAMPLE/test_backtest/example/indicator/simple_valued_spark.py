@@ -379,7 +379,6 @@ class simpleValued:
                     df.loc[:, 'half_roe_buy_mad'] = df.roe_half_year_pb7 / df.pb - dm[dm.category == 'roe_half_year_pb7_pb_mad'].per90.values[0]
                     df.loc[:, 'half_roe_sell_mad'] = dm[dm.category == 'roe_half_year_pb7_pb_mad'].per90.values[0] - df.roe_half_year_pb7 / df.pb - 0.3
             return df
-
         #print(basic.loc[:,['ts_code','trade_date']].head())
         return basic.groupby('trade_date').apply(_top10)
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
