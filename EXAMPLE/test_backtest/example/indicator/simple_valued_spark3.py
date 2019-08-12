@@ -49,7 +49,7 @@ class simpleValued:
         fin_spark = spark.createDataFrame(self.finacial)
         fin_spark.cache()
         fin_spark.repartition('ts_code')
-        p_struct = ['equity2_pb7', 'equity3_pb7', 'roe_year_pb7', 'roe_half_year_pb7', 'netasset', 'cash','q_ocf','q4_ocf','q4_opincome','q4_dtprofit','gross_margin_poly',  'q_gsprofit_margin_poly', 'inv_turn_poly', 'fa_turn_poly']
+        p_struct = ['roe_year_pb7', 'roe_half_year_pb7', 'netasset', 'cash','q_ocf','q4_ocf','q4_opincome','q4_dtprofit','gross_margin_poly',  'q_gsprofit_margin_poly', 'inv_turn_poly', 'fa_turn_poly']
         p = copy.deepcopy(fin_spark.schema)
         list(map(lambda x: p.add(StructField(x, DoubleType())), p_struct))
         @pandas_udf(p, PandasUDFType.GROUPED_MAP)
@@ -66,13 +66,6 @@ class simpleValued:
                 t = t.fillna(method='pad')
                 roe_year = (talib.EMA(t, 4) * 4 / 100 + 1).fillna(method='bfill')
                 roe_half_year = (talib.EMA(t, 2) * 4 / 100 + 1).fillna(method='bfill')
-            #近2年净资产收益率
-            asset_rise_2year = (data['equity_yoy'].shift(4)/100+1)*(data['equity_yoy']/100+1)
-            # 近3年净资产收益率
-            asset_rise_3year = (data['equity_yoy'].shift(8)/100+1) * asset_rise_2year
-            data.loc[:,'equity3_pb7'] = np.round(np.power(np.power(asset_rise_3year,1/3),7),2)
-            #print(len(asset_rise_3year[asset_rise_3year.isnull()]))
-            data.loc[:, 'equity2_pb7'] = np.round(np.power(np.power(asset_rise_2year,1/2), 7),2)
             #data.loc[:, 'roe_year_pb6'] = np.round(np.power(roe_year, 6),2)
             data.loc[:, 'roe_year_pb7'] = np.round(np.power(roe_year, 7),2)
             data.loc[:, 'roe_half_year_pb7'] = np.round(np.power(roe_half_year, 7), 2)
@@ -89,27 +82,45 @@ class simpleValued:
             q_opincome 经营活动单季度净收益
             q_ocf_to_or 经营活动产生的现金流量净额／经营活动净收益(单季度)
             '''
+
+            #data中数据是按时间顺序的，先pad 在bfill，即先用前面的历史数据后向填充，在第一条数据也缺失的情况下在用后面的向前填充
+            data.ebit.fillna(method='pad', inplace=True)
+            data.ebit.fillna(method='bfill', inplace=True)
+            data.ebit_ps.fillna(method='pad', inplace=True)
+            data.ebit_ps.fillna(method='bfill', inplace=True)
+            data.bps.fillna(method='pad', inplace=True)
+            data.bps.fillna(method='bfill', inplace=True)
+            data.q_opincome.fillna(method='pad', inplace=True)
+            data.q_opincome.fillna(method='bfill', inplace=True)
+            data.q_ocf_to_or.fillna(method='pad', inplace=True)
+            data.q_ocf_to_or.fillna(method='bfill', inplace=True)
+            data.cfps.fillna(method='pad', inplace=True)
+            data.cfps.fillna(method='bfill', inplace=True)
+            data.q_ocf.fillna(method='pad', inplace=True)
+            data.q_ocf.fillna(method='bfill', inplace=True)
+            data.q_dtprofit.fillna(method='pad', inplace=True)
+            data.q_dtprofit.fillna(method='bfill', inplace=True)
+            data.q_dt_roe.fillna(method='pad', inplace=True)
+            data.q_dt_roe.fillna(method='bfill', inplace=True)
+            for i in range(2,6):
+                if data.q_dt_roe.shape[0]>=i*4:
+                    data.loc[:,'roe_av'+str(i)] = data.q_dt_roe[0:i*4].sum()/i  #姑且先这么改，统计以年为单位，且1年之前的数据不用
             data.loc[:, 'netasset'] = data.ebit / data.ebit_ps * data.bps  # 净资产
             data.loc[:, 'q_ocf'] = data.q_opincome * data.q_ocf_to_or  # 单季度经营活动产生的现金流量
             data.loc[:, 'cash'] = data.ebit / data.ebit_ps * data.cfps  # 现金流
             if data['q_ocf'].isnull().all():
                 data.loc[:, 'q4_ocf'] = np.nan
             else:
-                t = data['q_ocf'].fillna(method='bfill')  # 后面的数据向前填充
-                t = t.fillna(method='pad')
-                data.loc[:, 'q4_ocf'] = (talib.EMA(t, 4)).fillna(method='bfill')  # QA.EMA(data['q_ocf'], 4)
+                data.loc[:, 'q8_ocf'] = (talib.EMA(t, 8)).fillna(method='bfill')  # QA.EMA(data['q_ocf'], 4)
             if data['q_opincome'].isnull().all():
                 data.loc[:, 'q4_opincome'] = np.nan
             else:
-                t = data['q_opincome'].fillna(method='bfill')  # 后面的数据向前填充
-                t = t.fillna(method='pad')
                 data.loc[:, 'q4_opincome'] = (talib.EMA(t, 4)).fillna(method='bfill')
             if data['q_dtprofit'].isnull().all():
                 data.loc[:, 'q4_dtprofit'] = np.nan
             else:
-                t = data['q_dtprofit'].fillna(method='bfill')  # 后面的数据向前填充
-                t = t.fillna(method='pad')
                 data.loc[:, 'q4_dtprofit'] = (talib.EMA(t, 4)).fillna(method='bfill')
+
             data.q_gsprofit_margin.fillna(method='pad', inplace=True)
             data.q_gsprofit_margin.fillna(method='bfill', inplace=True)
             if data['q_gsprofit_margin'].isnull().all():
@@ -140,9 +151,6 @@ class simpleValued:
                 data.loc[:, 'fa_turn_poly'] = [RegUtil.calc_regress_deg(gs[i:i + 4], show=False) for i in range(data.fa_turn.shape[0])]  # 计算连续4季度固定资产周转率趋势
             return data
         self.finacial = fin_spark.groupby('ts_code').apply(_ver_indicator).toPandas() #不是toPandas 慢，是延迟计算的原因，transform里的操作耗费3分钟
-        #self.finacial.to_csv('/usr/local/spark/modified.finace-2018.csv')
-        #self.finacial = pd.read_csv('/usr/local/spark/modified.finace-2018.csv')
-
 
         # def _hor_indicator(data):
         #     '''
@@ -161,7 +169,7 @@ class simpleValued:
         #                     'int': IntegerType(),
         #                     'none': NullType()}
         # fields = [StructField(k, struct_field_map[v], True) for k, v in columns]
-        add_struct = ['equity2_pb7','equity3_pb7','roe_year_pb7','roe_half_year_pb7','equity_rejust','q_dt_roe','gross_margin_poly','roe_yearly','q_gsprofit_margin_poly','inv_turn_poly','fa_turn_poly','opincome_of_ebt','dtprofit_to_profit','ocf_to_opincome','debt_to_assets','op_to_ebt','tbassets_to_totalassets']
+        add_struct = ['roe_av2','roe_av3','roe_av4','roe_av5','roe_year_pb7','roe_half_year_pb7','q_dt_roe','gross_margin_poly','roe_yearly','q_gsprofit_margin_poly','inv_turn_poly','fa_turn_poly','opincome_of_ebt','dtprofit_to_profit','ocf_to_opincome','debt_to_assets','op_to_ebt','tbassets_to_totalassets']
         p1 = copy.deepcopy(basic.schema)
         list(map(lambda x: p1.add(StructField(x, DoubleType())), add_struct))
         finacial = self.finacial
@@ -174,26 +182,7 @@ class simpleValued:
                     query = (df.trade_date >= fin.iloc[i].ann_date) & (df.trade_date < fin.iloc[i + 1].ann_date)
                 else:
                     query = df.trade_date >= fin.iloc[i].ann_date
-                df.loc[query, ['equity2_pb7']] = fin.iloc[i].equity2_pb7
-                df.loc[query, ['equity3_pb7']] = fin.iloc[i].equity3_pb7
-                df.loc[query, ['roe_half_year_pb7']] = fin.iloc[i].roe_half_year_pb7
-                df.loc[query, ['roe_year_pb7']] = fin.iloc[i].roe_year_pb7
-                df.loc[query, ['equity_rejust']] = np.round(df.loc[query].total_mv / df.loc[query].pb * 10000 / fin.iloc[i].netasset,2)
-                df.loc[query, ['q_dt_roe']] = fin.iloc[i].q_dt_roe
-                df.loc[query, ['gross_margin_poly']] = fin.iloc[i].gross_margin_poly
-                df.loc[query, ['roe_yearly']] = fin.iloc[i].roe_yearly
-                df.loc[query, ['q_gsprofit_margin_poly']] = fin.iloc[i].q_gsprofit_margin_poly
-                df.loc[query, ['inv_turn_poly']] = fin.iloc[i].inv_turn_poly
-                df.loc[query, ['fa_turn_poly']] = fin.iloc[i].fa_turn_poly
-                df.loc[query, ['opincome_of_ebt']] = fin.iloc[i].opincome_of_ebt #经营活动净收益/利润总额
-                df.loc[query, ['dtprofit_to_profit']] = fin.iloc[i].dtprofit_to_profit #扣除非经常损益后的净利润/净利润
-                df.loc[query, ['ocf_to_opincome']] = fin.iloc[i].ocf_to_opincome #经营活动产生的现金流量净额/经营活动净收益
-                df.loc[query, ['debt_to_assets']] = fin.iloc[i].debt_to_assets  # 资产负债率
-                df.loc[query, ['op_to_ebt']] = fin.iloc[i].op_to_ebt  # 营业利润／利润总额
-                df.loc[query, ['tbassets_to_totalassets']] = fin.iloc[i].tbassets_to_totalassets  # 有形资产/总资产
-
-
-
+                df.loc[query, add_struct] = fin.iloc[i][add_struct].values
             #print(basic.loc[:,['equity_pb6','equity_pb7','roe_year_pb6','roe_year_pb7']].head())
             return df
 
@@ -225,6 +214,8 @@ class simpleValued:
             '''
             non_finacial_codes = stock[(stock.industry != '银行') & (stock.industry != '保险')].ts_code.values
             basic = data.filter(data.ts_code.isin(non_finacial_codes.tolist()))
+            start_2years_bf = str(int(self.start[0:4]) - 2) + self.start[4:8]
+            basic = data.filter(data.ts_code.isin(stock[stock.list_date<start_2years_bf].ts_code.values))
             #non_finacial_codes = stock[(stock.industry != '银行') & (stock.industry != '保险')].ts_code.values
             #basic = data[data.ts_code.isin(non_finacial_codes)]
 
@@ -257,33 +248,33 @@ class simpleValued:
             rms = []
             if fin.shape[0]:
                 # fin.withColumn('rmflag',0)
-                # fin.where('q4_ocf/q4_opincome').map
+                # fin.where('q8_ocf/q4_opincome').map
                 fin.loc[:, 'rmflag'] = 0
-                fin.loc[fin.q4_ocf/fin.q4_opincome<0.6,'rmflag'] = 1 #经营活动现金流/经营活动净利润 <0.6的不要了
-                fin.loc[fin.q4_opincome / fin.q4_dtprofit < 0.7,'rmflag'] = 1  # 经营活动净收益/净利润 <0.7的不要了（投资收益什么的不靠谱）
+                fin.loc[fin.q8_ocf/fin.q4_opincome<0.55,'rmflag'] = 1 #经营活动现金流/经营活动净利润 <0.55的不要了，公司运营模式差异导致现金流变化极大，哪怕是同一行业也因公司收款政策导致差异极大，0.55依然会排除掉很多不错的公司
+                fin.loc[fin.q4_opincome / fin.q4_dtprofit < 0.75,'rmflag'] = 1  # 经营活动净收益/净利润 <0.7的不要了（投资收益什么的不靠谱）
             if ast.shape[0]:
                 ast.loc[:, 'rmflag'] = 0
                 ast.loc[ast.goodwill / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 商誉占比
-                ast.loc[ast.inventories / ast.total_hldr_eqy_exc_min_int > 0.3,'rmflag'] = 1  # 存货占比
-                ast.loc[(ast.notes_receiv + ast.accounts_receiv) / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 应收占比
+                ast.loc[ast.inventories / ast.total_hldr_eqy_exc_min_int > 0.35,'rmflag'] = 1  # 存货占比，也受行业影响，地产类别说0.35， 3.5都有可能
+                ast.loc[(ast.notes_receiv + ast.accounts_receiv) / ast.total_hldr_eqy_exc_min_int > 0.35,'rmflag'] = 1  # 应收占比,
 
             for i in range(ast.shape[0]): #举例 20171231 0; 20180331  1;20180630  1;20180930 0;20181231 1  ,则  20180331-20180930之间,20181231-end之间的全删除
                 if ast.iloc[i].rmflag == 1 and not rm:
                     rm = ast.iloc[i].ann_date
-                if ast.iloc[i].rmflag == 0 and not rm:
+                if ast.iloc[i].rmflag == 0 and rm:
                     rms.append((rm, ast.iloc[i].ann_date))
                     rm = None
-            if not rm:
+            if rm:
                 rms.append((rm, end))
                 rm = None
 
             for i in range(fin.shape[0]): #逻辑同上面的ast，可以和ast里的日期重复，但凡不符合都删除
                 if fin.iloc[i].rmflag == 1 and not rm:
                     rm = fin.iloc[i].ann_date
-                if fin.iloc[i].rmflag == 0 and not rm:
+                if fin.iloc[i].rmflag == 0 and rm:
                     rms.append((rm, fin.iloc[i].ann_date))
                     rm = None
-            if not rm:
+            if rm:
                 rms.append((rm, end))
                 rm = None
 
@@ -311,19 +302,16 @@ class simpleValued:
             # non_finacial_codes = self.stock[(self.stock.industry != '银行') & (self.stock.industry != '保险')].ts_code.values
             # non_finacial = df[df.ts_code.isin(non_finacial_codes)]
             non_finacial = df
-
-            non_finacial.loc[:, 'equity2_pb7_pb'] = np.round(non_finacial.loc[:, 'equity2_pb7'] / non_finacial.loc[:, 'pb'], 3)
-            non_finacial.loc[:, 'equity3_pb7_pb'] = np.round(non_finacial.loc[:, 'equity3_pb7'] / non_finacial.loc[:, 'pb'], 3)
             non_finacial.loc[:, 'roe_half_year_pb7_pb'] = np.round(non_finacial.loc[:, 'roe_half_year_pb7'] / non_finacial.loc[:, 'pb'], 3)
             non_finacial.loc[:, 'roe_year_pb7_pb'] = np.round(non_finacial.loc[:, 'roe_year_pb7'] / non_finacial.loc[:, 'pb'], 3)
             # 太假的不要，干扰数据，净资产本季报之后发生变化>1.1的排除
-            non_finacial = non_finacial.loc[(non_finacial.equity2_pb7 < 11) & (non_finacial.equity_rejust < 1.1) & (non_finacial.roe_year_pb7_pb < 11)]
-            st = non_finacial.loc[:, ['equity2_pb7_pb', 'equity3_pb7_pb', 'roe_half_year_pb7_pb', 'roe_year_pb7_pb']].describe([.25, .5, .85, .90, .95]).T.reset_index(level=0)
+            non_finacial = non_finacial.loc[(non_finacial.roe_year_pb7_pb < 11)]
+            st = non_finacial.loc[:, ['roe_half_year_pb7_pb', 'roe_year_pb7_pb']].describe([.25, .5, .85, .90, .95]).T.reset_index(level=0)
             st.columns = columns
             st.loc[:, 'statype'] = 'non_finacial'
             st.loc[:, 'trade_date'] = key[0]
 
-            cu = non_finacial.loc[:, ['equity2_pb7_pb', 'equity3_pb7_pb', 'roe_half_year_pb7_pb', 'roe_year_pb7_pb']]
+            cu = non_finacial.loc[:, ['roe_half_year_pb7_pb', 'roe_year_pb7_pb']]
             median = cu.median()
             mad = abs(cu - median).median()
             cu[cu - (median - mad * 3 * 1.4826) < 0] = np.array((median - mad * 3 * 1.4826).tolist() * cu.shape[0]).reshape((cu.shape[0], cu.columns.size))# 去极值,把小于median - mad * 3 * 1.4826设为median - mad * 3 * 1.4826
@@ -343,15 +331,15 @@ class simpleValued:
         # pass
         #dailymarket = pd.read_csv('/usr/local/spark/dailymarket-2018.csv')
         dailymarket = basic.groupby('trade_date').apply(_dailystat).toPandas()
-        print(dailymarket.columns)
-        print(dailymarket.head(2))
-        print('#############break###############')
-        dailymarket2 = pd.read_csv('/usr/local/spark/dailymarket-2018.csv')
-        print(dailymarket2.columns)
-        print(dailymarket2.head(2))
+        # print(dailymarket.columns)
+        # print(dailymarket.head(2))
+        # print('#############break###############')
+        # dailymarket2 = pd.read_csv('/usr/local/spark/dailymarket-2018.csv')
+        # print(dailymarket2.columns)
+        # print(dailymarket2.head(2))
         #dailymarket.to_csv('/usr/local/spark/dailymarket-2018.csv')
 
-        add_struct = ['buy', 'sell', 'roe_buy', 'roe_sell', 'half_roe_buy',
+        add_struct = ['roe_buy', 'roe_sell', 'half_roe_buy',
                       'half_roe_sell', 'buy_mad', 'sell_mad', 'roe_buy_mad', 'roe_sell_mad',
                       'half_roe_buy_mad', 'half_roe_sell_mad']
         p2 = copy.deepcopy(basic.schema)
@@ -369,19 +357,13 @@ class simpleValued:
                     print(dmt)
                 else:
                     dm = dmt[dmt.statype == 'non_finacial']
-                    print(dm[dm.category == 'equity2_pb7_pb'])
-                    if dm[dm.category == 'equity2_pb7_pb'].shape[0] >0:
-                        #print(dm[dm.category == 'equity2_pb7_pb'].per90)
-                        #print(dm[dm.category == 'equity2_pb7_pb'].per90)
-                        df.loc[:, 'buy'] = df.equity2_pb7 / df.pb - dm[dm.category == 'equity2_pb7_pb'].per90
-                        df.loc[:, 'sell'] = dm[dm.category == 'equity2_pb7_pb'].per90 - df.equity2_pb7 / df.pb - 0.3
+                    if dm[dm.category == 'roe_year_pb7_pb'].shape[0] >0:
                         df.loc[:, 'roe_buy'] = df.roe_year_pb7 / df.pb - dm[dm.category == 'roe_year_pb7_pb'].per90
                         df.loc[:, 'roe_sell'] = dm[dm.category == 'roe_year_pb7_pb'].per90 - df.roe_year_pb7 / df.pb - 0.3
                         df.loc[:, 'half_roe_buy'] = df.roe_half_year_pb7 / df.pb - dm[dm.category == 'roe_half_year_pb7_pb'].per90
                         df.loc[:, 'half_roe_sell'] = dm[dm.category == 'roe_half_year_pb7_pb'].per90 - df.roe_half_year_pb7 / df.pb - 0.3
 
-                        df.loc[:, 'buy_mad'] = df.equity2_pb7 / df.pb - dm[dm.category == 'equity2_pb7_pb_mad'].per90
-                        df.loc[:, 'sell_mad'] = dm[dm.category == 'equity2_pb7_pb_mad'].per90 - df.equity2_pb7 / df.pb - 0.3
+
                         df.loc[:, 'roe_buy_mad'] = df.roe_year_pb7 / df.pb - dm[dm.category == 'roe_year_pb7_pb_mad'].per90
                         df.loc[:, 'roe_sell_mad'] = dm[dm.category == 'roe_year_pb7_pb_mad'].per90 - df.roe_year_pb7 / df.pb - 0.3
                         df.loc[:, 'half_roe_buy_mad'] = df.roe_half_year_pb7 / df.pb - dm[dm.category == 'roe_half_year_pb7_pb_mad'].per90
@@ -564,13 +546,15 @@ if __name__ == '__main__':
     # log.warn("toPandas spend "+str((time.time() - t2)))
     # df1 = sv.industry_trend_top10(df)
     # df1.toPandas().set_index(['trade_date', 'ts_code'], drop=False)
-    #df1.to_csv('/usr/local/spark/result.csv')
+    df2.to_csv('/usr/local/spark/result.csv')
     #sv.udf_test(df)
 
 #D:\work\spark\spark-2.4.3-bin-hadoop2.7\bin\spark-submit --py-files D:\work\QUANTAXIS\quantaxis.zip  D:\work\QUANTAXIS\EXAMPLE\test_backtest\example\indicator\simple_valued_spark.py
 #./bin/spark-submit --driver-memory 6G  --master spark://hadoop1:7077 --py-files /usr/local/spark/quantaxis.zip  /usr/local/spark/simple_valued_spark.py
 
-
+t = time.time()
+# basic.count()
+print(time.time()-t)
 
 # conf=SparkConf()
 # #conf.setMaster("spark://172.16.17.51:7077")
