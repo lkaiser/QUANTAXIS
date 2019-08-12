@@ -383,7 +383,6 @@ class simpleValued:
         #print(basic.loc[:,['ts_code','trade_date']].head())
         return basic.groupby('trade_date').apply(_top10)
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
-
     def industry_trend_top10(self,data):
         start_3years_bf = str(int(self.start[0:4]) - 3)+self.start[4:8]
         industry_daily = pro.QA_fetch_get_industry_daily(start=start_3years_bf, end=self.end).sort_values(['industry','trade_date'], ascending = True)
