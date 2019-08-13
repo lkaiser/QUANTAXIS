@@ -17,12 +17,15 @@ class simpleValued:
         self.basic_temp_name = 'D:\\work\\QUANTAXIS\EXAMPLE\\test_backtest\\example\\indicator\\basic_temp_' +start+'_'+end +'.csv'
         #if not (os.path.isfile(self.basic_temp_name)):
         start_2years_bf = str(int(start[0:4]) - 5)
+        start_1years_bf = str(int(start[0:4]) - 1)
         self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
         self.income = pro.QA_fetch_get_income(start=start_2years_bf, end=end)
         self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
-        basic = pro.QA_fetch_get_dailyindicator(start=start,end=end)
+        self.basic_1more = pro.QA_fetch_get_dailyindicator(start=start_1years_bf,end=end)
+        self.basic_1adj = pro.QA_fetch_get_daily_adj(start=start_1years_bf,end=end)
+        self.basic_1more = self.basic_1more.merge(self.basic_1adj,on=['trade_date','ts_code'],how='inner')
             #print(basic.head().loc[:,['ts_code','trade_date','close','pe']])
-        self.basic = basic.sort_values(['ts_code','trade_date'], ascending = True)
+        self.basic = self.basic_1more[self.basic_1more.trade_date>=start].sort_values(['ts_code','trade_date'], ascending = True)
         self.stock = pro.QA_SU_stock_info()
         self.dailymarket = None
         self.industry = None
@@ -487,7 +490,12 @@ class simpleValued:
 
 
     def price_trend(self,df):
-
+        '''
+        计算连续10日，连续20成交量上涨程度，最近10日，3月，半年，1年最高涨幅，最近5日振幅，10日振幅
+        :param df:
+        :return:
+        '''
+        self.basic_1more =
         pass
 
     def time_choice(self,df):
