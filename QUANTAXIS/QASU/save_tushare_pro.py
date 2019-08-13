@@ -1196,13 +1196,13 @@ adj_factor	float	复权因子
         return
     report_income = client.stock_daily_adj_tushare
     print("##################get mainbz reports start####################")
-    for i_ in range(3520,len(df.index)):
+    for i_ in range(len(df.index)):
         QA_util_log_info('The %s of Total %s' % (i_, len(df.index)))
         ref = report_income.find({'ts_code': df.iloc[i_].ts_code})
         if ref.count() > 0:
             report_income.remove({'ts_code': df.iloc[i_].ts_code})
         #print('UPDATE stock daily adj Trying updating %s from %s to %s' % (df.iloc[i_].ts_code,start_day,datetime.datetime.now()))
-        time.sleep(0.4)
+        time.sleep(0.3)
         try:
             income = pro.adj_factor(ts_code=df.iloc[i_].ts_code)
         except Exception as e:
