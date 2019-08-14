@@ -488,7 +488,6 @@ class simpleValued:
 
 
 
-
     def price_trend(self,df):
         '''
         计算连续10日，连续20成交量上涨程度，最近10日，3月，半年，1年最高涨幅，最近5日振幅，10日振幅
