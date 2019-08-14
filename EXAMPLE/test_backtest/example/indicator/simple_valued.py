@@ -495,7 +495,27 @@ class simpleValued:
         :param df:
         :return:
         '''
-        self.basic_1more =
+        def _volumn_index(df):
+            #daterange = pd.date_range(self.start, self.end)
+            #timerange = [item.strftime('%Y-%m-%d') for item in list(daterange)]
+            # df.loc[:,'vol_rise10'] = df.turnover_rate.rolling(20).apply(lambda x:x[10:20].sum()/x[0:10].sum())
+            # df.loc[:, 'vol_rise20'] = df.turnover_rate.rolling(40).apply(lambda x: x[20:40].sum() / x[0:20].sum())
+            wave = np.var(df.close)
+            rise = df.close.last()/df.close.first()
+            return {'wave':wave,'rise':rise}
+            #df.loc[:, 'vol_' + str(n)] =
+
+        wave_rise_5 = df.close.rolling(5).apply(_volumn_index)
+        wave_rise_10 = df.close.rolling(10).apply(_volumn_index)
+        wave_rise_20 = df.close.rolling(20).apply(_volumn_index)
+
+        vol_rise_10 = df.turnover_rate.rolling(20).apply(lambda x:x[10:20].sum()/x[0:10].sum())
+        vol_rise_20 = df.turnover_rate.rolling(40).apply(lambda x: x[20:40].sum() / x[0:20].sum())
+
+
+
+
+        self.basic_1more
         pass
 
     def time_choice(self,df):
