@@ -487,16 +487,30 @@ class simpleValued:
         #计算未来3,6个月的最大涨幅，总共也就1年的数据，可以拿1,4,7,这3个月做未来3月涨幅回归，1,6 这2个月做未来6个月涨幅回归
 
 
-
-
     def price_trend(self,df):
         '''
         计算连续10日，连续20成交量上涨程度，最近10日，3月，半年，1年最高涨幅，最近5日振幅，10日振幅
         :param df:
         :return:
         '''
-        self.basic_1more =
-        pass
+        df2 = self.basic_1more.loc[:,['ts_code','trade_date','close','turnover_rate']]
+        df2.last_close = df2.close.shift(1)
+        df2.rise = df2.close/df2.last_close
+        f1 = lambda x:np.abs(x.rise*100-100).mean() #振幅，正负都算,以100为中心,统计均值
+        f2 = lambda x:x.max()/x.min() #最高涨幅,最高/最低
+        f3 = lambda x:x[x.shape[0]/2:x.shape[0]].sum()/x[0:x.shape[0]/2].sum() #成交量上涨程度，统计区间平分两段，后段除前段
+
+        df2.loc[:,'wave_5'] = df2.rise.rolling(5).apply(f1)
+        df2.loc[:,'wave_10'] = df2.rise.rolling(10).apply(f1)
+        df2.loc[:,'rise_10'] = df2.close.rolling(10).apply(f2)
+        df2.loc[:,'rise_60'] = df2.close.rolling(60).apply(f2)
+        df2.loc[:,'rise_250'] = df2.turnover_rate.rolling(250).apply(f2)
+        df2.loc[:,'vol_10'] = df2.turnover_rate.rolling(20).apply(f3)
+        df2.loc[:,'vol_20'] = df2.turnover_rate.rolling(40).apply(f3)
+
+        df = df.merge(df2[df2.trade_date>=self.start],on=['ts_code','trade_date'],how='inner')
+
+        return df
 
     def time_choice(self,df):
         '''
@@ -515,6 +529,7 @@ if __name__ == '__main__':
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
     df = sv.non_finacal_top5_valued()
     df = sv.industry_trend_top10(df)
+    df = sv.price_trend(df)
     df.to_pickle('basic-2018.pkl')
     #df.to_csv('basic-2018.csv')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
