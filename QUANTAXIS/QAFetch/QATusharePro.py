@@ -112,7 +112,15 @@ def QA_SU_stock_info():
     pro = get_pro()
     return pro.stock_basic()
 
+def QA_fetch_get_daily_adj(start, end,code=None,collections=DATABASE.stock_daily_adj_tushare):
+    query = {"trade_date": {
+        "$lte": end,
+        "$gte": start}}
+    if code:
+        query['ts_code'] = {'$in': code}
+    cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("trade_date",1)])
 
+    return pd.DataFrame([item for item in cursor])#sort_values(['ts_code','trade_date'], ascending = True)
 
 def QA_fetch_get_dailyindicator(start, end,code=None,collections=DATABASE.stock_daily_basic_tushare):
     query = {"trade_date": {
