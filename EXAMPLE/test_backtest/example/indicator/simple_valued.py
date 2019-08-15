@@ -487,35 +487,35 @@ class simpleValued:
         #计算未来3,6个月的最大涨幅，总共也就1年的数据，可以拿1,4,7,这3个月做未来3月涨幅回归，1,6 这2个月做未来6个月涨幅回归
 
 
-
     def price_trend(self,df):
         '''
         计算连续10日，连续20成交量上涨程度，最近10日，3月，半年，1年最高涨幅，最近5日振幅，10日振幅
         :param df:
         :return:
         '''
-        def _volumn_index(df):
-            #daterange = pd.date_range(self.start, self.end)
-            #timerange = [item.strftime('%Y-%m-%d') for item in list(daterange)]
-            # df.loc[:,'vol_rise10'] = df.turnover_rate.rolling(20).apply(lambda x:x[10:20].sum()/x[0:10].sum())
-            # df.loc[:, 'vol_rise20'] = df.turnover_rate.rolling(40).apply(lambda x: x[20:40].sum() / x[0:20].sum())
-            wave = np.var(df.close)
-            rise = df.close.last()/df.close.first()
-            return {'wave':wave,'rise':rise}
-            #df.loc[:, 'vol_' + str(n)] =
 
-        wave_rise_5 = df.close.rolling(5).apply(_volumn_index)
-        wave_rise_10 = df.close.rolling(10).apply(_volumn_index)
-        wave_rise_20 = df.close.rolling(20).apply(_volumn_index)
+        def _trend(df):
+            df2 = df.loc[:, ['ts_code', 'trade_date', 'close', 'turnover_rate']]
+            df2.last_close = df2.close.shift(1)
+            df2.fillna(method='bfill', inplace=True)
+            df2.loc[:, 'rise'] = df2.close / df2.last_close
+            f1 = lambda x: np.abs(x * 100 - 100).mean()  # 振幅，正负都算,以100为中心,统计均值
+            f2 = lambda x: x.max() / x.min()  # 最高涨幅,最高/最低
+            f3 = lambda x: x[x.shape[0] / 2:x.shape[0]].sum() / x[0:x.shape[0] / 2].sum()  # 成交量上涨程度，统计区间平分两段，后段除前段
+            df2.loc[:, 'wave_5'] = df2.rise.rolling(5).apply(f1)
+            df2.loc[:, 'wave_10'] = df2.rise.rolling(10).apply(f1)
+            df2.loc[:, 'rise_10'] = df2.close.rolling(10).apply(f2)
+            df2.loc[:, 'rise_60'] = df2.close.rolling(60).apply(f2)
+            df2.loc[:, 'rise_250'] = df2.turnover_rate.rolling(250).apply(f2)
+            df2.loc[:, 'vol_10'] = df2.turnover_rate.rolling(20).apply(f3)
+            df2.loc[:, 'vol_20'] = df2.turnover_rate.rolling(40).apply(f3)
+            #df = df.merge(df2[df2.trade_date >= self.start], on=['ts_code', 'trade_date'], how='inner')
+            return df2
 
-        vol_rise_10 = df.turnover_rate.rolling(20).apply(lambda x:x[10:20].sum()/x[0:10].sum())
-        vol_rise_20 = df.turnover_rate.rolling(40).apply(lambda x: x[20:40].sum() / x[0:20].sum())
+        df2 = self.basic_1more.groupby('ts_code').apply(_trend)
+        df = df.merge(df2[df2.trade_date>=self.start],on=['ts_code','trade_date'],how='inner')
 
-
-
-
-        self.basic_1more
-        pass
+        return df
 
     def time_choice(self,df):
         '''
@@ -534,6 +534,7 @@ if __name__ == '__main__':
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
     df = sv.non_finacal_top5_valued()
     df = sv.industry_trend_top10(df)
+    df = sv.price_trend(df)
     df.to_pickle('basic-2018.pkl')
     #df.to_csv('basic-2018.csv')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
