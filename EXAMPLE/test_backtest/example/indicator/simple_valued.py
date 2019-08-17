@@ -9,6 +9,14 @@ from QUANTAXIS.ML import RegUtil
 import time
 #pd.set_option('display.float_format', lambda x: '%.3f' % x)
 #pd.set_option('display.max_columns',5, 'display.max_rows', 100)
+#python3 -m pip install -e .
+#可以用以下格式直接在命令行下调用：python -m zipfile ...
+#“...”部分有以下几种格式：
+#-l <zipfile>：列出压缩包内文件
+#-c <zipfile> <source1> ... <sourceN>：把 N 个 source 文件压缩至 zipfile
+#-e <zipfile> <output_dir>：解压 zipfile 至目标路径
+#-t <zipfile>：检验是否为有效的 zipfile
+# python -m zipfile quantaxis.zip QUANTAXIS
 class simpleValued:
 
     def __init__(self,start,end):
@@ -21,11 +29,12 @@ class simpleValued:
         self.finacial = pro.QA_fetch_get_finindicator(start=start_2years_bf,end=end)
         self.income = pro.QA_fetch_get_income(start=start_2years_bf, end=end)
         self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
-        self.basic_1more = pro.QA_fetch_get_dailyindicator(start=start_1years_bf,end=end)
+        self.basic_1more = pro.QA_fetch_get_dailyindicator(start=start_1years_bf,end=end)#.sort_values(['ts_code','trade_date'], ascending = True)
         self.basic_1adj = pro.QA_fetch_get_daily_adj(start=start_1years_bf,end=end)
-        self.basic_1more = self.basic_1more.merge(self.basic_1adj,on=['trade_date','ts_code'],how='inner')
+        self.basic_1more = self.basic_1more.merge(self.basic_1adj,on=['trade_date','ts_code'],how='inner').sort_values(['ts_code','trade_date'], ascending = True)
+        self.basic_1more.loc[:,'adj_close'] = self.basic_1more.close * self.basic_1more.adj_factor
             #print(basic.head().loc[:,['ts_code','trade_date','close','pe']])
-        self.basic = self.basic_1more[self.basic_1more.trade_date>=start].sort_values(['ts_code','trade_date'], ascending = True)
+        self.basic = self.basic_1more[self.basic_1more.trade_date>=start]#.sort_values(['ts_code','trade_date'], ascending = True)
         self.stock = pro.QA_SU_stock_info()
         self.dailymarket = None
         self.industry = None
@@ -43,28 +52,6 @@ class simpleValued:
             :param data:
             :return:
             '''
-            #print(data['q_dt_roe'].head())
-            if(data['q_dt_roe'].isnull().all()):
-                roe_half_year = roe_year = np.array([np.nan] * data.shape[0])
-            else:
-                roe_year = (QA.EMA(data['q_dt_roe'], 4)*4/100+1).fillna(method='bfill') # 连续4个季度取平均，再乘以4得到年化roe，跟同花顺略有不同，同花顺以年为单位，1季度*4，二季度*2，三季度*4/3，我这个比较平稳
-                roe_half_year = (QA.EMA(data['q_dt_roe'], 2)*4/100+1).fillna(method='bfill') # 连续2个继续取平均，再乘以4得到半年化，敏感性比年化的要强
-            #近2年净资产收益率
-            # asset_rise_2year = (data['equity_yoy'].shift(4)/100+1)*(data['equity_yoy']/100+1)
-            # 近3年净资产收益率
-            # asset_rise_3year = (data['equity_yoy'].shift(8)/100+1) * asset_rise_2year
-            # data.loc[:,'equity3_pb7'] = np.round(np.power(np.power(asset_rise_3year,1/3),7),2)
-            #print(len(asset_rise_3year[asset_rise_3year.isnull()]))
-            # data.loc[:, 'equity2_pb7'] = np.round(np.power(np.power(asset_rise_2year,1/2), 7),2)
-            #data.loc[:, 'roe_year_pb6'] = np.round(np.power(roe_year, 6),2)
-            data.q_dt_roe.fillna(data.q_dt_roe.mean(), inplace=True)
-            for i in range(2,6):
-                if data.shape[0]>=i*4:
-                    data.loc[:, 'roe_av'+str(i)] = data.q_dt_roe[0:i*4].mean()/i
-                else:
-                    data.loc[:, 'roe_av' + str(i)] = None
-            data.loc[:, 'roe_year_pb7'] = np.round(np.power(roe_year, 7),2)
-            data.loc[:, 'roe_half_year_pb7'] = np.round(np.power(roe_half_year, 7), 2)
 
             ''' 
             fcff  float 自由现金流
@@ -92,10 +79,27 @@ class simpleValued:
             data.q_dtprofit.fillna(method='bfill', inplace=True)
             data.q_ocf_to_or.fillna(method='pad', inplace=True)
             data.q_ocf_to_or.fillna(method='bfill', inplace=True)
+            data.q_dt_roe.fillna(data.q_dt_roe.mean(), inplace=True)
 
-            data.loc[:,'netasset'] = data.ebit/data.ebit_ps*data.bps #净资产
+            if (data['q_dt_roe'].isnull().all()):
+                roe_half_year = roe_year = np.array([np.nan] * data.shape[0])
+            else:
+                roe_year = (QA.EMA(data['q_dt_roe'], 4) * 4 / 100 + 1).fillna(method='bfill')  # 连续4个季度取平均，再乘以4得到年化roe，跟同花顺略有不同，同花顺以年为单位，1季度*4，二季度*2，三季度*4/3，我这个比较平稳
+                roe_half_year = (QA.EMA(data['q_dt_roe'], 2) * 4 / 100 + 1).fillna(method='bfill')  # 连续2个继续取平均，再乘以4得到半年化，敏感性比年化的要强
+
+            data.q_dt_roe.fillna(data.q_dt_roe.mean(), inplace=True)
+            for i in range(2, 6):
+                if data.shape[0] >= i * 4:
+                    data.loc[:, 'roe_av' + str(i)] = data.q_dt_roe[0:i * 4].mean() / i
+                else:
+                    data.loc[:, 'roe_av' + str(i)] = None
+            data.loc[:, 'roe_year_pb7'] = np.round(np.power(roe_year, 7), 2)
+            data.loc[:, 'roe_half_year_pb7'] = np.round(np.power(roe_half_year, 7), 2)
+
+            #data.loc[:,'netasset'] = data.ebit/data.ebit_ps*data.bps #净资产
             data.loc[:,'cash'] = data.ebit/data.ebit_ps*data.cfps #现金流
             data.loc[:,'q_ocf'] = data.q_opincome*data.q_ocf_to_or #单季度经营活动产生的现金流量
+
             if data['q_ocf'].isnull().all():
                 data.loc[:, 'q4_ocf'] = np.nan
             else:
@@ -183,7 +187,7 @@ class simpleValued:
         # 增加 equity2_pb7、equity3_pb7、roe_year_pb7等几列指标,_indicatorCp运算时间过长，要20多分钟，需要
         # 对中间结果加以保存,后续考虑通过并发框架实施
         if not (os.path.isfile(self.basic_temp_name)):
-            df = basic.groupby('ts_code').apply(_indicatorCp)
+            df = basic.groupby('ts_code',as_index=False).apply(_indicatorCp)
             df.to_pickle(self.basic_temp_name)
         else:
             df = pd.read_pickle(self.basic_temp_name)
@@ -221,6 +225,7 @@ class simpleValued:
         basic = _before_fiter(basic,self.stock,self.finacial)
 
         basic = self.indcators_prepare(basic)
+        #print(basic[['ts_code','trade_date']].head())
 
         def _af_fiter(df):
             '''
@@ -495,18 +500,18 @@ class simpleValued:
         '''
 
         def _trend(df):
-            df2 = df.loc[:, ['ts_code', 'trade_date', 'close', 'turnover_rate']]
-            df2.last_close = df2.close.shift(1)
+            df2 = df.loc[:, ['ts_code', 'trade_date', 'adj_close', 'turnover_rate']]
+            df2.last_close = df2.adj_close.shift(1)
             df2.fillna(method='bfill', inplace=True)
-            df2.loc[:, 'rise'] = df2.close / df2.last_close
+            df2.loc[:, 'rise'] = df2.adj_close / df2.last_close
             f1 = lambda x: np.abs(x * 100 - 100).mean()  # 振幅，正负都算,以100为中心,统计均值
             f2 = lambda x: x.max() / x.min()  # 最高涨幅,最高/最低
-            f3 = lambda x: x[x.shape[0] / 2:x.shape[0]].sum() / x[0:x.shape[0] / 2].sum()  # 成交量上涨程度，统计区间平分两段，后段除前段
+            f3 = lambda x: x[int(x.shape[0] / 2):x.shape[0]].sum() / x[0:int(x.shape[0] / 2)].sum()  # 成交量上涨程度，统计区间平分两段，后段除前段
             df2.loc[:, 'wave_5'] = df2.rise.rolling(5).apply(f1)
             df2.loc[:, 'wave_10'] = df2.rise.rolling(10).apply(f1)
-            df2.loc[:, 'rise_10'] = df2.close.rolling(10).apply(f2)
-            df2.loc[:, 'rise_60'] = df2.close.rolling(60).apply(f2)
-            df2.loc[:, 'rise_250'] = df2.turnover_rate.rolling(250).apply(f2)
+            df2.loc[:, 'rise_10'] = df2.adj_close.rolling(10).apply(f2)
+            df2.loc[:, 'rise_60'] = df2.adj_close.rolling(60).apply(f2)
+            df2.loc[:, 'rise_250'] = df2.adj_close.rolling(250).apply(f2)
             df2.loc[:, 'vol_10'] = df2.turnover_rate.rolling(20).apply(f3)
             df2.loc[:, 'vol_20'] = df2.turnover_rate.rolling(40).apply(f3)
             #df = df.merge(df2[df2.trade_date >= self.start], on=['ts_code', 'trade_date'], how='inner')
@@ -534,8 +539,10 @@ if __name__ == '__main__':
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
     df = sv.non_finacal_top5_valued()
     df = sv.industry_trend_top10(df)
-    df = sv.price_trend(df)
     df.to_pickle('basic-2018.pkl')
+    #df = pd.read_pickle('basic-2018.pkl')
+    df = sv.price_trend(df)
+    df.to_pickle('basic_with_trend-2018.pkl')
     #df.to_csv('basic-2018.csv')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
 
