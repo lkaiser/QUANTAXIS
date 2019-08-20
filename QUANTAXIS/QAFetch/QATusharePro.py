@@ -120,7 +120,17 @@ def QA_fetch_get_daily_adj(start, end,code=None,collections=DATABASE.stock_daily
         query['ts_code'] = {'$in': code}
     cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("trade_date",1)])
 
-    return pd.DataFrame([item for item in cursor])#sort_values(['ts_code','trade_date'], ascending = True)
+    return pd.DataFrame([item for item in cursor]).sort_values(['ts_code','trade_date'], ascending = True)
+
+def QA_fetch_get_money_flow(start, end,code=None,collections=DATABASE.stock_daily_moneyflow_tushare):
+    query = {"trade_date": {
+        "$lte": end,
+        "$gte": start}}
+    if code:
+        query['ts_code'] = {'$in': code}
+    cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("trade_date",1)])
+
+    return pd.DataFrame([item for item in cursor]).sort_values(['ts_code','trade_date'], ascending = True)
 
 def QA_fetch_get_dailyindicator(start, end,code=None,collections=DATABASE.stock_daily_basic_tushare):
     query = {"trade_date": {
@@ -130,7 +140,7 @@ def QA_fetch_get_dailyindicator(start, end,code=None,collections=DATABASE.stock_
         query['ts_code'] = {'$in': code}
     cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("trade_date",1)])
 
-    return pd.DataFrame([item for item in cursor])#sort_values(['ts_code','trade_date'], ascending = True)
+    return pd.DataFrame([item for item in cursor]).sort_values(['ts_code','trade_date'], ascending = True)
 
 def QA_fetch_get_industry_daily(start, end,industry=None,collections=DATABASE.industry_daily_tushare):
     query = {"trade_date": {
@@ -140,7 +150,7 @@ def QA_fetch_get_industry_daily(start, end,industry=None,collections=DATABASE.in
         query['industry'] = {'$in': industry}
     cursor = collections.find(query, {"_id": 0}, batch_size=10000)#.sort([("ts_code",1),("trade_date",1)])
 
-    return pd.DataFrame([item for item in cursor])#sort_values(['ts_code','trade_date'], ascending = True)
+    return pd.DataFrame([item for item in cursor]).sort_values(['industry','trade_date'], ascending = True)
 
 if __name__ == '__main__':
     fin = QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
