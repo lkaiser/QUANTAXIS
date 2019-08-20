@@ -37,7 +37,10 @@ class simpleValued:
         self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
         self.basic_1more = pro.QA_fetch_get_dailyindicator(start=start_1years_bf, end=end)
         self.basic_1adj = pro.QA_fetch_get_daily_adj(start=start_1years_bf, end=end)
-        self.basic_1more = self.basic_1more.merge(self.basic_1adj, on=['trade_date', 'ts_code'], how='inner').sort_values(['ts_code', 'trade_date'], ascending=True)
+        self.money = spark.createDataFrame(pro.QA_fetch_get_money_flow(start=start_1years_bf,end=end))
+
+        self.basic_1more = self.basic_1more.merge(self.basic_1adj, on=['trade_date', 'ts_code'], how='left').sort_values(['ts_code', 'trade_date'], ascending=True)
+        #self.basic_1more
         self.basic_1more.loc[:,'adj_close'] = self.basic_1more.close*self.basic_1more.adj_factor
         self.basic_1more = spark.createDataFrame(self.basic_1more)
         self.basic = self.basic_1more.filter(self.basic_1more.trade_date >= start)#.sort_values(['ts_code', 'trade_date'], ascending=True)
@@ -66,19 +69,7 @@ class simpleValued:
             纵轴指标
             :param data:
             :return:
-            '''
-            #data = data.sort_values(by='trade_date')
 
-            #近2年净资产收益率
-            #asset_rise_2year = (data['equity_yoy'].shift(4)/100+1)*(data['equity_yoy']/100+1)
-            # 近3年净资产收益率
-            #asset_rise_3year = (data['equity_yoy'].shift(8)/100+1) * asset_rise_2year
-            #data.loc[:,'equity3_pb7'] = np.round(np.power(np.power(asset_rise_3year,1/3),7),2)
-            #print(len(asset_rise_3year[asset_rise_3year.isnull()]))
-            #data.loc[:, 'equity2_pb7'] = np.round(np.power(np.power(asset_rise_2year,1/2), 7),2)
-            #data.loc[:, 'roe_year_pb6'] = np.round(np.power(roe_year, 6),2)
-
-            ''' 
             fcff  float 自由现金流
             ocfps 	float	每股经营活动产生的现金流量净额
             cfps	float	每股现金流量净额
@@ -117,7 +108,7 @@ class simpleValued:
 
             for i in range(2, 6):
                 if data.shape[0] >= i * 4:
-                    data.loc[:, 'roe_av' + str(i)] = data.q_dt_roe[0:i * 4].mean() / i
+                    data.loc[:, 'roe_av' + str(i)] = data.q_dt_roe[-i * 4:].mean() / i
                 else:
                     data.loc[:, 'roe_av' + str(i)] = None
             data.loc[:, 'roe_year_pb7'] = np.round(np.power(roe_year, 8), 2)
@@ -169,7 +160,8 @@ class simpleValued:
                 data.loc[:, 'fa_turn_poly'] = [RegUtil.calc_regress_deg(gs[i:i + 4], show=False) for i in range(data.fa_turn.shape[0])]  # 计算连续4季度固定资产周转率趋势
             return data
         self.finacial = fin_spark.groupby('ts_code').apply(_ver_indicator).toPandas() #不是toPandas 慢，是延迟计算的原因，transform里的操作耗费3分钟
-        #self.finacial.to_csv('/usr/local/spark/modified.finace-2018.csv')
+        #self.finacial.to_pickle('/usr/local/spark/finacial.pkl')
+        #return
         #self.finacial = pd.read_csv('/usr/local/spark/modified.finace-2018.csv')
 
 
@@ -211,13 +203,6 @@ class simpleValued:
         """
         简单价值判断，近1年 roe,近半年roe，近3年净资产增速，近2年净资产增速。价值法6年pb、7年pb
         """
-        # basic = self.basic[self.basic==df[0].code]
-        # dailymarket = self.dailymarket[(self.dailymarket.statype=='all')&(self.dailymarket.trade_date>=basic[0].trade_date)&(self.dailymarket.trade_date<=basic[-1].trade_date)]
-        # basic.equity_pb6/basic.pb
-        # td = basic.merge(dailymarket[['trade_date', 'equity_pb6top5', 'equity_pb7top5','roe_year_pb6top5','roe_year_pb7top5']], left_on='trade_date', right_on='trade_date', how='left').set_index(basic.index)
-        # td
-        #log = log4jLogger.LogManager.getLogger('__FILE__')
-        #log('#############break###############')
 
         def _before_fiter(data,stock,fin):
             '''
@@ -230,7 +215,7 @@ class simpleValued:
             non_finacial_codes = stock[(stock.industry != '银行') & (stock.industry != '保险')].ts_code.values
             basic = data.filter(data.ts_code.isin(non_finacial_codes.tolist()))
             start_2years_bf = str(int(self.start[0:4]) - 2) + self.start[4:8]
-            basic = data.filter(data.ts_code.isin(stock[stock.list_date < start_2years_bf].ts_code.values.tolist()))
+            basic = basic.filter(basic.ts_code.isin(stock[stock.list_date < start_2years_bf].ts_code.values.tolist()))
             #non_finacial_codes = stock[(stock.industry != '银行') & (stock.industry != '保险')].ts_code.values
             #basic = data[data.ts_code.isin(non_finacial_codes)]
 
@@ -242,6 +227,7 @@ class simpleValued:
         basic = _before_fiter(basic,self.stock,self.finacial)
         basic.cache()
         basic = self.indcators_prepare(basic)
+        #basic.toPandas().to_pickle('/usr/local/spark/basic.pkl')
         basic.cache()
         #basic.count()
 
@@ -300,11 +286,6 @@ class simpleValued:
 
         basic = basic.groupby('ts_code').apply(_af_fiter)
         basic.cache()
-        #basic.coalesce(1).write.csv(path='/usr/local/spark/modified.basic-2018.csv', header=True, sep=",", mode='overwrite')#write.option("header", "true").csv('/usr/local/spark/modified.basic-2018.csv') #coalesce 合并分区 spark_df.write.csv(path=file, header=True, sep=",", mode='overwrite')
-        #basic = spark.read.csv('/usr/local/spark/modified.basic-2018.csv', header=True)
-        #basic.toPandas().to_csv('/usr/local/spark/modified2.basic-2018.csv')
-
-
 
         # 每日统计指标
         columns = [ 'cnt', 'mean', 'std', 'min', 'per25', 'per50', 'per85', 'per90', 'per95', 'max']
@@ -313,9 +294,6 @@ class simpleValued:
         columns.insert(0,'category')
         @pandas_udf(p1, PandasUDFType.GROUPED_MAP)
         def _dailystat(key,df):
-            # rs = []
-            # non_finacial_codes = self.stock[(self.stock.industry != '银行') & (self.stock.industry != '保险')].ts_code.values
-            # non_finacial = df[df.ts_code.isin(non_finacial_codes)]
             non_finacial = df
             non_finacial.loc[:, 'roe_half_year_pb7_pb'] = np.round(non_finacial.loc[:, 'roe_half_year_pb7'] / non_finacial.loc[:, 'pb'], 3)
             non_finacial.loc[:, 'roe_year_pb7_pb'] = np.round(non_finacial.loc[:, 'roe_year_pb7'] / non_finacial.loc[:, 'pb'], 3)
@@ -342,22 +320,11 @@ class simpleValued:
             # return pd.concat(rs)
             #return st
 
-        # print(self.basic.loc[:,['equity_pb6','equity_pb7','roe_year_pb6','roe_year_pb7']].head())
-        # pass
-        #dailymarket = pd.read_csv('/usr/local/spark/dailymarket-2018.csv')
         dailymarket = basic.groupby('trade_date').apply(_dailystat).toPandas()
-        # def _f(s):
-        #     print(s)
-        #     if s['category'] == 'equity2_pb7_pb':
-        #         print(s.per90)
-        # dailymarket[dailymarket.statype == 'non_finacial'].apply(_f,axis=1)
-        # print(dailymarket.columns)
-        # print(dailymarket.head(2))
-        # print('#############break###############')
-        # dailymarket2 = pd.read_csv('/usr/local/spark/dailymarket-2018.csv')
-        # print(dailymarket2.columns)
-        # print(dailymarket2.head(2))
-        #dailymarket.to_csv('/usr/local/spark/dailymarket-2018.csv')
+        #dailymarket.to_pickle('/usr/local/spark/market.pkl')
+        #return
+
+
 
         add_struct = [ 'roe_pb7', 'market_pb7_90', 'half_roe_pb7',
                       'half_market_pb7_90', 'roe_pb7_mad', 'market_pb7_90_mad', 'half_roe_pb7_mad', 'half_market_pb7_90_mad',
@@ -393,7 +360,13 @@ class simpleValued:
         #return basic.groupby(level=1, sort=False).apply(_top5).set_index(['trade_date', 'ts_code'])
     def industry_trend_top10(self,data):
         start_3years_bf = str(int(self.start[0:4]) - 3)+self.start[4:8]
-        industry_daily = pro.QA_fetch_get_industry_daily(start=start_3years_bf, end=self.end).sort_values(['industry','trade_date'], ascending = True)
+        start_1years_bf = str(int(self.start[0:4]) - 1) + self.start[4:8]
+        industry_daily = pro.QA_fetch_get_industry_daily(start=start_3years_bf, end=self.end)#.sort_values(['industry','trade_date'], ascending = True)
+
+        def _new_industry_remove(df,tap):
+            if df.trade_date.min() <= tap:
+                return df
+        industry_daily = industry_daily.groupby("industry",as_index=False).apply(_new_industry_remove,tap=start_1years_bf).reset_index(level=0).iloc[:,1:]
         industry_daily = spark.createDataFrame(industry_daily)
 
         new_struct = ['q_dtprofit_ttm_poly', 'q_gr_poly', 'q_profit_poly', 'q_dtprofit_poly', 'q_opincome_poly', 'industry_roe', 'industry_pe', 'roe_ttm', 'industry_pe_ttm']
@@ -560,7 +533,7 @@ class simpleValued:
         p3.add(StructField('trade_date', StringType()))
         list(map(lambda x: p3.add(StructField(x, DoubleType())), add3_struct))
         @pandas_udf(p3, PandasUDFType.GROUPED_MAP)
-        def _trend(df):
+        def _vol_trend(df):
             df2 = df.loc[:, ['ts_code', 'trade_date', 'adj_close', 'turnover_rate']]
             df2.last_close = df2.adj_close.shift(1)
             df2.fillna(method='bfill', inplace=True)
@@ -577,10 +550,29 @@ class simpleValued:
             df2.loc[:, 'vol_20'] = df2.turnover_rate.rolling(40).apply(f3)
             return df2[['ts_code','trade_date','rise','wave_5','wave_10','rise_10','rise_60','rise_250','vol_10','vol_20']]
 
-        df2 = self.basic_1more.groupby('ts_code').apply(_trend)
+        df2 = self.basic_1more.groupby('ts_code').apply(_vol_trend)
         df2.filter(df2.trade_date>=start)
         #df = df.join(df2, ['industry', 'trade_date'], "inner")
-        return df.join(df2,['ts_code','trade_date'],'inner')
+
+        add4_struct = ['sm_vol_20', 'sm_amount_20','md_vol_20', 'md_amount_20', 'lg_vol_20', 'lg_amount_20', 'elg_vol_20', 'elg_amount_20']
+        p4 = copy.deepcopy(self.money.schema)
+        list(map(lambda x: p4.add(StructField(x, DoubleType())), add4_struct))
+        @pandas_udf(p4, PandasUDFType.GROUPED_MAP)
+        def _money_trend(df):
+            df.loc[:, 'sm_vol_20'] = df.buy_sm_vol.rolling(20).sum()
+            df.loc[:, 'sm_amount_20'] = df.buy_sm_amount.rolling(20).sum()
+            df.loc[:,'md_vol_20'] = df.buy_md_vol.rolling(20).sum()
+            df.loc[:, 'md_amount_20'] = df.buy_md_amount.rolling(20).sum()
+            df.loc[:, 'lg_vol_20'] = df.buy_lg_vol.rolling(20).sum()
+            df.loc[:, 'lg_amount_20'] = df.buy_lg_amount.rolling(20).sum()
+            df.loc[:, 'elg_vol_20'] = df.buy_elg_vol.rolling(20).sum()
+            df.loc[:, 'elg_amount_20'] = df.buy_elg_amount.rolling(20).sum()
+            return df
+        df3 = self.money.groupby('ts_code').apply(_money_trend)
+        df3.filter(df3.trade_date>=start)
+
+        df = df.join(df2,['ts_code','trade_date'],'inner')
+        return df.join(df3,['ts_code','trade_date'],'inner')
 
 
 
@@ -601,11 +593,11 @@ if __name__ == '__main__':
 
     #df = spark.createDataFrame(basic.loc[:,['ts_code','trade_date']])
     #print('###############fy###############')
-    sv = simpleValued('20180101','20181231')
+    sv = simpleValued('20180601','20190816')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
     df = sv.non_finacal_top5_valued()
-    df = sv.industry_trend_top10(df)
-    df = sv.price_trend(df)
+    #df = sv.industry_trend_top10(df)
+    #df = sv.price_trend(df)
     df2 = df.toPandas()
     #df2.set_index(['trade_date', 'ts_code'], drop=False)
     #df2.to_csv('/usr/local/spark/result.csv')
@@ -626,26 +618,3 @@ if __name__ == '__main__':
 
 #D:\work\spark\spark-2.4.3-bin-hadoop2.7\bin\spark-submit --py-files D:\work\QUANTAXIS\quantaxis.zip  D:\work\QUANTAXIS\EXAMPLE\test_backtest\example\indicator\simple_valued_spark.py
 #./bin/spark-submit --driver-memory 6G  --conf spark.default.parallelism=48  --conf spark.sql.shuffle.partitions=24 --master spark://hadoop1:7077 --py-files /usr/local/spark/quantaxis.zip  /usr/local/spark/simple_valued_spark.py
-
-
-
-
-
-# conf=SparkConf()
-# #conf.setMaster("spark://172.16.17.51:7077")
-# conf.setAppName("python test application")
-# #
-# # # logFile="hdfs://hadoop241:8020/user/root/testfile"
-# sc=SparkContext(conf=conf)
-# # # logData=sc.textFile(logFile).cache()
-# #
-#
-# lines = sc.textFile("/usr/local/spark/catalina.2019-05-22.out")
-# t0 = time()
-# #lines.count()
-# csv_data  = lines.map(lambda x: x.split("-"))
-# csv_data.count()
-# head_rows = csv_data.take(5)
-# tt = time() - t0
-# print("Count completed in {} seconds".format(round(tt,3)))
-# print(head_rows)

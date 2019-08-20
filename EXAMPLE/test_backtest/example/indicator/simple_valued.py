@@ -16,7 +16,8 @@ import time
 #-c <zipfile> <source1> ... <sourceN>：把 N 个 source 文件压缩至 zipfile
 #-e <zipfile> <output_dir>：解压 zipfile 至目标路径
 #-t <zipfile>：检验是否为有效的 zipfile
-# python -m zipfile quantaxis.zip QUANTAXIS
+# python -m zipfile -c quantaxis.zip QUANTAXIS
+# python -m pip install -e .
 class simpleValued:
 
     def __init__(self,start,end):
@@ -31,6 +32,7 @@ class simpleValued:
         self.asset = pro.QA_fetch_get_assetAliability(start=start_2years_bf, end=end)
         self.basic_1more = pro.QA_fetch_get_dailyindicator(start=start_1years_bf,end=end)#.sort_values(['ts_code','trade_date'], ascending = True)
         self.basic_1adj = pro.QA_fetch_get_daily_adj(start=start_1years_bf,end=end)
+        self.money = pro.QA_fetch_get_money_flow(start=start_1years_bf, end=end)
         self.basic_1more = self.basic_1more.merge(self.basic_1adj,on=['trade_date','ts_code'],how='inner').sort_values(['ts_code','trade_date'], ascending = True)
         self.basic_1more.loc[:,'adj_close'] = self.basic_1more.close * self.basic_1more.adj_factor
             #print(basic.head().loc[:,['ts_code','trade_date','close','pe']])
@@ -90,7 +92,7 @@ class simpleValued:
             data.q_dt_roe.fillna(data.q_dt_roe.mean(), inplace=True)
             for i in range(2, 6):
                 if data.shape[0] >= i * 4:
-                    data.loc[:, 'roe_av' + str(i)] = data.q_dt_roe[0:i * 4].mean() / i
+                    data.loc[:, 'roe_av' + str(i)] = data.q_dt_roe[-i * 4:].mean() / i
                 else:
                     data.loc[:, 'roe_av' + str(i)] = None
             data.loc[:, 'roe_year_pb7'] = np.round(np.power(roe_year, 7), 2)
@@ -146,7 +148,7 @@ class simpleValued:
                 data.loc[:, 'fa_turn_poly'] = [RegUtil.calc_regress_deg(gs[i:i + 4], show=False) for i in range(data.fa_turn.shape[0])]  # 计算连续4季度固定资产周转率趋势
             return data
 
-        self.finacial = self.finacial.groupby('ts_code').apply(_ver_indicator)
+        #self.finacial = self.finacial.groupby('ts_code').apply(_ver_indicator)
 
         # def _hor_indicator(data):
         #     '''
@@ -174,12 +176,6 @@ class simpleValued:
                 else:
                     query = df.trade_date >= fin.iloc[i].ann_date
                 df.loc[query, col] = fin.iloc[i][col].values
-                # df.loc[query, ['opincome_of_ebt']] = fin.iloc[i].opincome_of_ebt #经营活动净收益/利润总额
-                # df.loc[query, ['dtprofit_to_profit']] = fin.iloc[i].dtprofit_to_profit #扣除非经常损益后的净利润/净利润
-                # df.loc[query, ['ocf_to_opincome']] = fin.iloc[i].ocf_to_opincome #经营活动产生的现金流量净额/经营活动净收益
-                # df.loc[query, ['debt_to_assets']] = fin.iloc[i].debt_to_assets  # 资产负债率
-                # df.loc[query, ['op_to_ebt']] = fin.iloc[i].op_to_ebt  # 营业利润／利润总额
-                # df.loc[query, ['tbassets_to_totalassets']] = fin.iloc[i].tbassets_to_totalassets  # 有形资产/总资产
             return df
 
             #basic = self.basic
@@ -187,7 +183,7 @@ class simpleValued:
         # 增加 equity2_pb7、equity3_pb7、roe_year_pb7等几列指标,_indicatorCp运算时间过长，要20多分钟，需要
         # 对中间结果加以保存,后续考虑通过并发框架实施
         if not (os.path.isfile(self.basic_temp_name)):
-            df = basic.groupby('ts_code',as_index=False).apply(_indicatorCp)
+            df = basic.groupby('ts_code',as_index=False).apply(_indicatorCp).reset_index(level=0).iloc[:,1:]  #groupy by 有点奇怪，as_index虽然没有把key提升，但还是有双重索引，需要reset_index
             df.to_pickle(self.basic_temp_name)
         else:
             df = pd.read_pickle(self.basic_temp_name)
@@ -215,17 +211,15 @@ class simpleValued:
             non_finacial_codes = stock[(stock.industry != '银行') & (stock.industry != '保险')].ts_code.values
             basic = data[data.ts_code.isin(non_finacial_codes)]
             start_2years_bf = str(int(self.start[0:4]) - 2)+self.start[4:8]
-            basic = data[data.ts_code.isin(stock[stock.list_date<start_2years_bf].ts_code.values)]
+            basic = basic[basic.ts_code.isin(stock[stock.list_date<start_2years_bf].ts_code.values)]
             return basic
 
         basic = data
         if basic is None:
             basic = self.basic
-
+        #basic = basic[basic.ts_code.isin(['600160.SH','000528.SZ'])]
         basic = _before_fiter(basic,self.stock,self.finacial)
-
         basic = self.indcators_prepare(basic)
-        #print(basic[['ts_code','trade_date']].head())
 
         def _af_fiter(df):
             '''
@@ -499,7 +493,7 @@ class simpleValued:
         :return:
         '''
 
-        def _trend(df):
+        def _vol_trend(df):
             df2 = df.loc[:, ['ts_code', 'trade_date', 'adj_close', 'turnover_rate']]
             df2.last_close = df2.adj_close.shift(1)
             df2.fillna(method='bfill', inplace=True)
@@ -516,9 +510,21 @@ class simpleValued:
             df2.loc[:, 'vol_20'] = df2.turnover_rate.rolling(40).apply(f3)
             #df = df.merge(df2[df2.trade_date >= self.start], on=['ts_code', 'trade_date'], how='inner')
             return df2
+        df2 = self.basic_1more.groupby('ts_code').apply(_vol_trend)
+        df = df.merge(df2[df2.trade_date >= self.start], on=['ts_code', 'trade_date'], how='inner')
 
-        df2 = self.basic_1more.groupby('ts_code').apply(_trend)
-        df = df.merge(df2[df2.trade_date>=self.start],on=['ts_code','trade_date'],how='inner')
+        def _money_trend(df):
+            df.loc[:, 'sm_vol_20'] = df.buy_sm_vol.rolling(20).sum()
+            df.loc[:, 'sm_amount_20'] = df.buy_sm_amount.rolling(20).sum()
+            df.loc[:,'md_vol_20'] = df.buy_md_vol.rolling(20).sum()
+            df.loc[:, 'md_amount_20'] = df.buy_md_amount.rolling(20).sum()
+            df.loc[:, 'lg_vol_20'] = df.buy_lg_vol.rolling(20).sum()
+            df.loc[:, 'lg_amount_20'] = df.buy_lg_amount.rolling(20).sum()
+            df.loc[:, 'elg_vol_20'] = df.buy_elg_vol.rolling(20).sum()
+            df.loc[:, 'elg_amount_20'] = df.buy_elg_amount.rolling(20).sum()
+        df3 = self.money.groupby('ts_code').apply(_money_trend)
+        df = df.merge(df2[df3.trade_date >= self.start], on=['ts_code', 'trade_date'], how='inner')
+
 
         return df
 
@@ -535,15 +541,13 @@ if __name__ == '__main__':
     #finacial = pro.QA_fetch_get_finindicator(start='20100101', end='20181231',code=['006160.SH','002056.SZ'])
 
     print('wtf')
-    sv = simpleValued('20180101','20181231')
+    sv = simpleValued('20180601','20190816')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
     df = sv.non_finacal_top5_valued()
-    df = sv.industry_trend_top10(df)
-    df.to_pickle('basic-2018.pkl')
-    #df = pd.read_pickle('basic-2018.pkl')
-    df = sv.price_trend(df)
-    df.to_pickle('basic_with_trend-2018.pkl')
-    #df.to_csv('basic-2018.csv')
+    # df = sv.industry_trend_top10(df)
+    # df.to_pickle('basic-2019.pkl')
+    # df = sv.price_trend(df)
+    # df.to_pickle('basic_with_trend-2019.pkl')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
 
 
