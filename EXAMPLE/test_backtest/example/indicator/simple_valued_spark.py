@@ -11,7 +11,7 @@ from pyspark.sql.types import StructType,DoubleType,StructField,StringType
 #from pyspark.sql.functions import
 import copy
 import talib
-import logging
+import datetime
 import time
 
 import os
@@ -516,8 +516,8 @@ class simpleValued:
         first = df.loc[df.buy & (df.trade_date > '20180101') & (df.trade_date < '20180210')].groupby('ts_code', as_index=False).first()
 
         df = pd.read_pickle('/usr/local/spark/result.pkl')
-        t = df[(df.opincome_of_ebt > 85) & (df.debt_to_assets < 70) & (df.trade_date > '20180101') & (df.trade_date < '20180210') & (df.roe_yearly > 10) & (df.roe_pb7 > 1.3) & (df.half_roe_pb7 > df.roe_pb7)]
-        first = t.groupby('ts_code', as_index=False).first()
+        d = df[(df.opincome_of_ebt > 85) & (df.debt_to_assets < 70) & (df.trade_date > '20180601') & (df.trade_date < '20180910') & (df.roe_yearly > 10) & (df.roe_pb7 > 1.3) & (df.half_roe_pb7 > df.roe_pb7)]
+        first = d.groupby('ts_code', as_index=False).first()
         first[(first.rise_250 < 60) & (first.rise_10 < 1.16) & ((first.wave_5 > 2.8) | (first.wave_10 > 2.5))]
 
     def price_trend(self,df):
@@ -575,6 +575,29 @@ class simpleValued:
         return df.join(df3,['ts_code','trade_date'],'inner')
 
 
+    def mad(self,df):
+        '''
+        统一去极值处理
+        :param df:
+        :return:
+        '''
+        pass
+
+    def perform(self,df,first_day,time_delay):
+        aweek = datetime.datetime.strptime(first_day, "%Y%m%d").date()+datetime.timedelta(days=7)
+        end = datetime.datetime.strptime(first_day, "%Y%m%d").date()+datetime.timedelta(days=time_delay)
+        first = df[(df.opincome_of_ebt > 85) & (df.debt_to_assets < 70) & (df.trade_date > first_day) & (df.trade_date < aweek.strftime('%Y%m%d')) & (df.roe_yearly > 10) & (df.roe_pb7 > 1) & (df.half_roe_pb7 > df.roe_pb7)].groupby('ts_code', as_index=False).first()
+        se = df[df.ts_code.isin(first.ts_code.values) & df.trade_date<end].groupby('ts_code',as_index=False).last()
+        se = se[['ts_code','adj_close','trade_date']]
+        se.rename(columns=({'adj_close': 'adj_close_end','trade_date':'trade_date_end'}), inplace = True)
+        first = first.merge(se,on='ts_code',how='inner')
+        first.loc[:,'range_rise'] = first.adj_close_end/first.adj_close
+        return first
+
+    t.sort_values(by=['range_rise', 'elg_amount_20'], ascending=False)[['ts_code', 'range_rise', 'elg_amount_20', 'lg_amount_20', 'md_amount_20']]
+
+
+
 
 
 
@@ -596,11 +619,11 @@ if __name__ == '__main__':
     sv = simpleValued('20180601','20190816')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
     df = sv.non_finacal_top5_valued()
-    #df = sv.industry_trend_top10(df)
-    #df = sv.price_trend(df)
+    df = sv.industry_trend_top10(df)
+    df = sv.price_trend(df)
     df2 = df.toPandas()
     #df2.set_index(['trade_date', 'ts_code'], drop=False)
-    #df2.to_csv('/usr/local/spark/result.csv')
+    df2.to_csv('/usr/local/spark/result.csv')
     df2.to_pickle('/usr/local/spark/result.pkl')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
     # finacial = pd.read_csv('/usr/local/spark/finace-2018.csv')
