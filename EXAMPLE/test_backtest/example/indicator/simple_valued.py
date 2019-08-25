@@ -497,7 +497,6 @@ class simpleValued:
         :param df:
         :return:
         '''
-
         def _vol_trend(df):
             df2 = df.loc[:, ['ts_code', 'trade_date', 'adj_close', 'turnover_rate']]
             df2.last_close = df2.adj_close.shift(1)
