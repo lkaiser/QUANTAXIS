@@ -7,8 +7,10 @@ import datetime
 import os
 from QUANTAXIS.ML import RegUtil
 import time
-#pd.set_option('display.float_format', lambda x: '%.3f' % x)
-#pd.set_option('display.max_columns',5, 'display.max_rows', 100)
+#pd.set_option('display.float_format', lambda x: '%.3f' % x) 小数点后3位，去除科学计数法
+#pd.set_option('display.max_columns',10) 最多多少列
+#pd.set_option('display.max_rows', 200)最多多少行
+#pd.set_option('expand_frame_repr', False) 不许换行
 #python3 -m pip install -e .
 #可以用以下格式直接在命令行下调用：python -m zipfile ...
 #“...”部分有以下几种格式：
@@ -235,13 +237,13 @@ class simpleValued:
             rms = []
             if fin.shape[0]:
                 fin.loc[:, 'rmflag'] = 0
-                fin.loc[fin.q4_ocf/fin.q4_opincome<0.55,'rmflag'] = 1 #经营活动现金流/经营活动净利润 <0.6的不要了
+                #fin.loc[fin.q4_ocf/fin.q4_opincome<0.55,'rmflag'] = 1 #经营活动现金流/经营活动净利润 <0.6的不要了，这条还是不要了，以后改为过去2-3年经营活动现金流与利润的判断，短期1-4个季度的经营现金流变化方差太大
                 fin.loc[fin.q4_opincome / fin.q4_dtprofit < 0.8,'rmflag'] = 1  # 经营活动净收益/净利润 <0.7的不要了（投资收益什么的不靠谱）
             if ast.shape[0]:
                 ast.loc[:, 'rmflag'] = 0
                 ast.loc[ast.goodwill / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 商誉占比
-                ast.loc[ast.inventories / ast.total_hldr_eqy_exc_min_int > 0.38,'rmflag'] = 1  # 存货占比
-                ast.loc[(ast.notes_receiv + ast.accounts_receiv) / ast.total_hldr_eqy_exc_min_int > 0.3,'rmflag'] = 1  # 应收占比
+                #ast.loc[ast.inventories / ast.total_hldr_eqy_exc_min_int > 0.4,'rmflag'] = 1  # 存货占比,不同行业不同情况，房地产或者白酒存货超多，这个条件也要去除
+                #ast.loc[(ast.notes_receiv + ast.accounts_receiv) / ast.total_hldr_eqy_exc_min_int > 0.35,'rmflag'] = 1  # 应收占比，应收同理
 
             for i in range(ast.shape[0]): #举例 20171231 0; 20180331  1;20180630  1;20180930 0;20181231 1  ,则  20180331-20180930之间,20181231-end之间的全删除
                 if ast.iloc[i].rmflag == 1 and not rm:
@@ -514,14 +516,23 @@ class simpleValued:
         df = df.merge(df2[df2.trade_date >= self.start], on=['ts_code', 'trade_date'], how='inner')
 
         def _money_trend(df):
-            df.loc[:, 'sm_vol_20'] = df.buy_sm_vol.rolling(20).sum()
+            #df.loc[:, 'sm_vol_20'] = df.buy_sm_vol.rolling(20).sum()
             df.loc[:, 'sm_amount_20'] = df.buy_sm_amount.rolling(20).sum()
-            df.loc[:,'md_vol_20'] = df.buy_md_vol.rolling(20).sum()
+            #df.loc[:,'md_vol_20'] = df.buy_md_vol.rolling(20).sum()
             df.loc[:, 'md_amount_20'] = df.buy_md_amount.rolling(20).sum()
-            df.loc[:, 'lg_vol_20'] = df.buy_lg_vol.rolling(20).sum()
+            #df.loc[:, 'lg_vol_20'] = df.buy_lg_vol.rolling(20).sum()
             df.loc[:, 'lg_amount_20'] = df.buy_lg_amount.rolling(20).sum()
-            df.loc[:, 'elg_vol_20'] = df.buy_elg_vol.rolling(20).sum()
+            #df.loc[:, 'elg_vol_20'] = df.buy_elg_vol.rolling(20).sum()
             df.loc[:, 'elg_amount_20'] = df.buy_elg_amount.rolling(20).sum()
+
+            df.loc[:, 'md_lg_elg_rate'] = round((df.md_amount_20 + df.lg_amount_20 + df.elg_amount_20) / (
+                        df.md_amount_20 + df.lg_amount_20 + df.elg_amount_20 + df.sm_amount_20), 3)
+            df.loc[:, 'lg_elg_rate'] = round((df.lg_amount_20 + df.elg_amount_20) / (
+                        df.md_amount_20 + df.lg_amount_20 + df.elg_amount_20 + df.sm_amount_20), 3)
+            df.loc[:, 'net_lg_elg'] = df.lg_amount_20 + df.elg_amount_20 - (df.s_lg_amount_20 + df.s_elg_amount_20)
+            df.loc[:, 'net_md_lg_elg'] = df.md_amount_20 + df.lg_amount_20 + df.elg_amount_20 - (
+                        df.s_md_amount_20 + df.s_lg_amount_20 + df.s_elg_amount_20)
+            return df
         df3 = self.money.groupby('ts_code').apply(_money_trend)
         df = df.merge(df2[df3.trade_date >= self.start], on=['ts_code', 'trade_date'], how='inner')
 
@@ -544,10 +555,10 @@ if __name__ == '__main__':
     sv = simpleValued('20180601','20190816')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
     df = sv.non_finacal_top5_valued()
-    # df = sv.industry_trend_top10(df)
-    # df.to_pickle('basic-2019.pkl')
-    # df = sv.price_trend(df)
-    # df.to_pickle('basic_with_trend-2019.pkl')
+    df = sv.industry_trend_top10(df)
+    df.to_pickle('basic-2019.pkl')
+    df = sv.price_trend(df)
+    df.to_pickle('basic_with_trend-2019.pkl')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
 
 

@@ -554,19 +554,33 @@ class simpleValued:
         df2.filter(df2.trade_date>=start)
         #df = df.join(df2, ['industry', 'trade_date'], "inner")
 
-        add4_struct = ['sm_vol_20', 'sm_amount_20','md_vol_20', 'md_amount_20', 'lg_vol_20', 'lg_amount_20', 'elg_vol_20', 'elg_amount_20']
+        add4_struct = ['sm_amount_20', 'md_amount_20', 'lg_amount_20', 'elg_amount_20', 's_sm_amount_20', 's_md_amount_20',  's_lg_amount_20', 's_elg_amount_20','md_lg_elg_rate','lg_elg_rate','net_lg_elg','net_md_lg_elg']
         p4 = copy.deepcopy(self.money.schema)
         list(map(lambda x: p4.add(StructField(x, DoubleType())), add4_struct))
         @pandas_udf(p4, PandasUDFType.GROUPED_MAP)
         def _money_trend(df):
-            df.loc[:, 'sm_vol_20'] = df.buy_sm_vol.rolling(20).sum()
+            #df.loc[:, 'sm_vol_20'] = df.buy_sm_vol.rolling(20).sum()
             df.loc[:, 'sm_amount_20'] = df.buy_sm_amount.rolling(20).sum()
-            df.loc[:,'md_vol_20'] = df.buy_md_vol.rolling(20).sum()
+            #df.loc[:,'md_vol_20'] = df.buy_md_vol.rolling(20).sum()
             df.loc[:, 'md_amount_20'] = df.buy_md_amount.rolling(20).sum()
-            df.loc[:, 'lg_vol_20'] = df.buy_lg_vol.rolling(20).sum()
+            #df.loc[:, 'lg_vol_20'] = df.buy_lg_vol.rolling(20).sum()
             df.loc[:, 'lg_amount_20'] = df.buy_lg_amount.rolling(20).sum()
-            df.loc[:, 'elg_vol_20'] = df.buy_elg_vol.rolling(20).sum()
+            #df.loc[:, 'elg_vol_20'] = df.buy_elg_vol.rolling(20).sum()
             df.loc[:, 'elg_amount_20'] = df.buy_elg_amount.rolling(20).sum()
+            #df.loc[:, 's_sm_vol_20'] = df.sell_sm_vol.rolling(20).sum()
+            df.loc[:, 's_sm_amount_20'] = df.sell_sm_amount.rolling(20).sum()
+            #df.loc[:, 's_md_vol_20'] = df.sell_md_vol.rolling(20).sum()
+            df.loc[:, 's_md_amount_20'] = df.sell_md_amount.rolling(20).sum()
+            #df.loc[:, 's_lg_vol_20'] = df.sell_lg_vol.rolling(20).sum()
+            df.loc[:, 's_lg_amount_20'] = df.sell_lg_amount.rolling(20).sum()
+            #df.loc[:, 's_elg_vol_20'] = df.sell_elg_vol.rolling(20).sum()
+            df.loc[:, 's_elg_amount_20'] = df.sell_elg_amount.rolling(20).sum()
+            df.loc[:,'md_lg_elg_rate'] = round((df.md_amount_20+df.lg_amount_20+df.elg_amount_20)/(df.md_amount_20+df.lg_amount_20+df.elg_amount_20+df.sm_amount_20),3)
+            df.loc[:, 'lg_elg_rate'] = round((df.lg_amount_20 + df.elg_amount_20) / (df.md_amount_20 + df.lg_amount_20 + df.elg_amount_20 + df.sm_amount_20),3)
+            # df.loc[:, 's_md_lg_elg_rate'] = (df.s_md_amount_20 + df.s_lg_amount_20 + df.s_elg_amount_20) / (df.s_md_amount_20 + df.s_lg_amount_20 + df.s_elg_amount_20 + df.s_sm_amount_20)
+            # df.loc[:, 's_lg_elg_rate'] = (df.s_lg_amount_20 + df.s_elg_amount_20) / (df.s_md_amount_20 + df.s_lg_amount_20 + df.s_elg_amount_20 + df.s_sm_amount_20)
+            df.loc[:,'net_lg_elg'] = df.lg_amount_20+df.elg_amount_20-(df.s_lg_amount_20 + df.s_elg_amount_20)
+            df.loc[:,'net_md_lg_elg'] = df.md_amount_20+df.lg_amount_20+df.elg_amount_20-(df.s_md_amount_20 + df.s_lg_amount_20 + df.s_elg_amount_20)
             return df
         df3 = self.money.groupby('ts_code').apply(_money_trend)
         df3.filter(df3.trade_date>=start)
@@ -587,14 +601,19 @@ class simpleValued:
         aweek = datetime.datetime.strptime(first_day, "%Y%m%d").date()+datetime.timedelta(days=7)
         end = datetime.datetime.strptime(first_day, "%Y%m%d").date()+datetime.timedelta(days=time_delay)
         first = df[(df.opincome_of_ebt > 85) & (df.debt_to_assets < 70) & (df.trade_date > first_day) & (df.trade_date < aweek.strftime('%Y%m%d')) & (df.roe_yearly > 10) & (df.roe_pb7 > 1) & (df.half_roe_pb7 > df.roe_pb7)].groupby('ts_code', as_index=False).first()
-        se = df[df.ts_code.isin(first.ts_code.values) & df.trade_date<end].groupby('ts_code',as_index=False).last()
+        se = df[df.ts_code.isin(first.ts_code.values) & (df.trade_date < end.strftime('%Y%m%d')) & (df.trade_date > first_day)].groupby('ts_code', as_index=False).apply(lambda t: t.loc[t.adj_close.idxmax()])
         se = se[['ts_code','adj_close','trade_date']]
         se.rename(columns=({'adj_close': 'adj_close_end','trade_date':'trade_date_end'}), inplace = True)
         first = first.merge(se,on='ts_code',how='inner')
         first.loc[:,'range_rise'] = first.adj_close_end/first.adj_close
         return first
+    df = pd.read_pickle('usr/local/spark/result.pkl')
+    t = perform(df,'20190101',80).sort_values(by=['range_rise', 'elg_amount_20'], ascending=False)
+    t[['ts_code', 'range_rise', 'elg_amount_20', 'lg_amount_20', 'md_amount_20','s_elg_amount_20','s_lg_amount_20','s_md_amount_20','net_lg_elg','net_md_lg_elg']]
+    main = df[df[0:10].ts_code.isin(t.ts_code)]
+    #main.round((df.md_amount_20+df.lg_amount_20+df.elg_amount_20)/(df.md_amount_20+df.lg_amount_20+df.elg_amount_20+df.sm_amount_20),3)
+    main
 
-    t.sort_values(by=['range_rise', 'elg_amount_20'], ascending=False)[['ts_code', 'range_rise', 'elg_amount_20', 'lg_amount_20', 'md_amount_20']]
 
 
 
@@ -616,7 +635,7 @@ if __name__ == '__main__':
 
     #df = spark.createDataFrame(basic.loc[:,['ts_code','trade_date']])
     #print('###############fy###############')
-    sv = simpleValued('20180601','20190816')
+    sv = simpleValued('20180101','20190816')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
     df = sv.non_finacal_top5_valued()
     df = sv.industry_trend_top10(df)
