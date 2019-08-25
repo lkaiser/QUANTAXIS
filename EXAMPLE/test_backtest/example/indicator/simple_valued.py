@@ -513,7 +513,7 @@ class simpleValued:
             df2.loc[:, 'vol_10'] = df2.turnover_rate.rolling(20).apply(f3)
             df2.loc[:, 'vol_20'] = df2.turnover_rate.rolling(40).apply(f3)
             #df = df.merge(df2[df2.trade_date >= self.start], on=['ts_code', 'trade_date'], how='inner')
-            return df2
+            return df2[['ts_code','trade_date','rise','wave_5','wave_10','rise_10','rise_60','rise_250','vol_10','vol_20']]
 
         df2 = self.basic_1more.groupby('ts_code',as_index=False).apply(_vol_trend)
         # print('###########after applying vol trend df2 ################')
