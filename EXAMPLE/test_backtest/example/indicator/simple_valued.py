@@ -543,7 +543,7 @@ class simpleValued:
                         df.s_md_amount_20 + df.s_lg_amount_20 + df.s_elg_amount_20)
             return df
         df3 = self.money.groupby('ts_code',as_index=False).apply(_money_trend)
-        df = df.merge(df2[df3.trade_date >= self.start], on=['ts_code', 'trade_date'], how='inner')
+        df = df.merge(df3[df3.trade_date >= self.start], on=['ts_code', 'trade_date'], how='inner')
 
 
         return df
