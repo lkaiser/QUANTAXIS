@@ -251,13 +251,14 @@ class simpleValued:
                 # fin.withColumn('rmflag',0)
                 # fin.where('q4_ocf/q4_opincome').map
                 fin.loc[:, 'rmflag'] = 0
-                fin.loc[fin.q4_ocf/fin.q4_opincome<0.55,'rmflag'] = 1 #经营活动现金流/经营活动净利润 <0.6的不要了
+                #fin.loc[fin.q4_ocf/fin.q4_opincome<0.55,'rmflag'] = 1 #经营活动现金流/经营活动净利润 <0.6的不要了
                 fin.loc[fin.q4_opincome / fin.q4_dtprofit < 0.7,'rmflag'] = 1  # 经营活动净收益/净利润 <0.7的不要了（投资收益什么的不靠谱）
+
             if ast.shape[0]:
                 ast.loc[:, 'rmflag'] = 0
                 ast.loc[ast.goodwill / ast.total_hldr_eqy_exc_min_int > 0.2,'rmflag'] = 1  # 商誉占比
-                ast.loc[ast.inventories / ast.total_hldr_eqy_exc_min_int > 0.37,'rmflag'] = 1  # 存货占比
-                ast.loc[(ast.notes_receiv + ast.accounts_receiv) / ast.total_hldr_eqy_exc_min_int > 0.35,'rmflag'] = 1  # 应收占比
+                #ast.loc[ast.inventories / ast.total_hldr_eqy_exc_min_int > 0.37,'rmflag'] = 1  # 存货占比
+                #ast.loc[(ast.notes_receiv + ast.accounts_receiv) / ast.total_hldr_eqy_exc_min_int > 0.35,'rmflag'] = 1  # 应收占比
 
             for i in range(ast.shape[0]): #举例 20171231 0; 20180331  1;20180630  1;20180930 0;20181231 1  ,则  20180331-20180930之间,20181231-end之间的全删除
                 if ast.iloc[i].rmflag == 1 and not rm:
@@ -383,58 +384,59 @@ class simpleValued:
             :param data:
             :return:
             '''
-
-            dates = [str(int(start[0:4]) - 3) + '0831',str(int(start[0:4]) - 3) + '1031',
-                     str(int(start[0:4]) - 2) + '0431', str(int(start[0:4]) - 2) + '0831',
-                     str(int(start[0:4]) - 2) + '1031', str(int(start[0:4]) - 1) + '0431',
-                     str(int(start[0:4]) - 1) + '0831', str(int(start[0:4]) - 1) + '1031']
-            #print(data.iloc[-1])
-            _lam_f = lambda x, y: y[y.trade_date <= x].iloc[-1] if y[y.trade_date <= x].shape[0]>0 else None
-            resampledf = pd.DataFrame(list(filter(lambda x:x is not None,map(_lam_f, dates,[data]*8))))#dates.apply() #每个行业每天都数据，resampledf 取指定date前的最新一条数据,没有则不取，相当于取季报出来前一天的数据
-            #map(lambda x,y:np.where(y[y.a>x].shape[0]>0,y[y.a>x].iloc[-1],None),[3,5],[df]*2)
             col = ['trade_date', 'industry']
-            col = col+new_struct
+            col = col + new_struct
             indicator = pd.DataFrame(columns=col)
-            df = data[data.trade_date >= start]
-            df.reset_index(drop=True)
-            for index,item in df.iterrows():
-            # roe 、总资产、净利润、货币资金、存货、净资产类同处理
-                #try:
-                if item.trade_date[4:8] <= "0831" and item.trade_date[4:8] > "0431" and item.trade_date[0:4] + '0431' not in dates:
-                    dates.append([item.trade_date[0:4] + '0431'])
-                    t = list(filter(lambda x:x is not None,map(_lam_f, [item.trade_date[0:4] + '0431'],[data])))
-                    if t is not None:
-                        resampledf = resampledf.append(t)
-                if item.trade_date[4:8] <= "1031" and item.trade_date[4:8] > "0831" and item.trade_date[0:4] + '0831' not in dates:
-                    dates.append([item.trade_date[0:4] + '0831'])
-                    t = list(filter(lambda x: x is not None, map(_lam_f, [item.trade_date[0:4] + '0831'], [data])))
-                    if t is not None:
-                        resampledf = resampledf.append(t)
-                if item.trade_date[4:8] > "1031" and item.trade_date[0:4] + '1031' not in dates:
-                    dates.append([item.trade_date[0:4] + '1031'])
-                    t = list(filter(lambda x: x is not None, map(_lam_f, [item.trade_date[0:4] + '1031'], [data])))
-                    if t is not None:
-                        resampledf = resampledf.append(t)
-                resample = resampledf.append(list(map(_lam_f, [item.trade_date], [data])))#每次循环最新一天都要替换，所以最新一天不能赋值给 resampledf,只能给resample
-                resample = resample.dropna(how='all')
-                ind = -8 if resample.shape[0]>8 else -resample.shape[0]
-                #print(resample.loc[:, ['industry', 'trade_date', 'q_dtprofit']].head())
-                # fit, p1 = RegUtil.regress_y_polynomial(resample[-8:].q_gr_ttm, poly=3, show=False)
-                # fit, p2 = RegUtil.regress_y_polynomial(resample[-8:].q_profit_ttm, poly=3, show=False)
-                fit, p3 = RegUtil.regress_y_polynomial(resample[ind:].q_dtprofit_ttm, poly=3, show=False)
-                # fit, p4 = RegUtil.regress_y_polynomial(resample[-8:].q_opincome_ttm, poly=3, show=False)
-                fit, p5 = RegUtil.regress_y_polynomial(resample[ind:].q_gr, poly=3, show=False)
-                fit, p6 = RegUtil.regress_y_polynomial(resample[ind:].q_profit, poly=3, show=False)
-                fit, p7 = RegUtil.regress_y_polynomial(resample[ind:].q_dtprofit, poly=3, show=False)
-                fit, p8 = RegUtil.regress_y_polynomial(resample[ind:].q_opincome, poly=3, show=False)
-                roe = item.q_dtprofit / item.total_hldr_eqy_exc_min_int
-                pe = item.ind_total_mv*10000/item.q_dtprofit
-                roe_ttm = item.q_dtprofit_ttm / item.total_hldr_eqy_exc_min_int
-                pe_ttm = item.ind_total_mv*10000/item.q_dtprofit_ttm
-                #print(indicator.columns)
-                #print([item.trade_date,key[0],p3(8),p5(8),p6(8),p7(8),p8(8),roe,pe,roe_ttm,pe_ttm])
-                indicator.loc[index] = [item.trade_date,key[0],p3(8),p5(8),p6(8),p7(8),p8(8),roe,pe,roe_ttm,pe_ttm]
-                #print(indicator.loc[index])
+            if data.shape[0] > 200:
+                dates = [str(int(start[0:4]) - 3) + '0831',str(int(start[0:4]) - 3) + '1031',
+                         str(int(start[0:4]) - 2) + '0431', str(int(start[0:4]) - 2) + '0831',
+                         str(int(start[0:4]) - 2) + '1031', str(int(start[0:4]) - 1) + '0431',
+                         str(int(start[0:4]) - 1) + '0831', str(int(start[0:4]) - 1) + '1031']
+                #print(data.iloc[-1])
+                _lam_f = lambda x, y: y[y.trade_date <= x].iloc[-1] if y[y.trade_date <= x].shape[0]>0 else None
+                resampledf = pd.DataFrame(list(filter(lambda x:x is not None,map(_lam_f, dates,[data]*8))))#dates.apply() #每个行业每天都数据，resampledf 取指定date前的最新一条数据,没有则不取，相当于取季报出来前一天的数据
+                #map(lambda x,y:np.where(y[y.a>x].shape[0]>0,y[y.a>x].iloc[-1],None),[3,5],[df]*2)
+
+                df = data[data.trade_date >= start]
+                df.reset_index(drop=True)
+                for index,item in df.iterrows():
+                # roe 、总资产、净利润、货币资金、存货、净资产类同处理
+                    #try:
+                    if item.trade_date[4:8] <= "0831" and item.trade_date[4:8] > "0431" and item.trade_date[0:4] + '0431' not in dates:
+                        dates.append([item.trade_date[0:4] + '0431'])
+                        t = list(filter(lambda x:x is not None,map(_lam_f, [item.trade_date[0:4] + '0431'],[data])))
+                        if t is not None:
+                            resampledf = resampledf.append(t)
+                    if item.trade_date[4:8] <= "1031" and item.trade_date[4:8] > "0831" and item.trade_date[0:4] + '0831' not in dates:
+                        dates.append([item.trade_date[0:4] + '0831'])
+                        t = list(filter(lambda x: x is not None, map(_lam_f, [item.trade_date[0:4] + '0831'], [data])))
+                        if t is not None:
+                            resampledf = resampledf.append(t)
+                    if item.trade_date[4:8] > "1031" and item.trade_date[0:4] + '1031' not in dates:
+                        dates.append([item.trade_date[0:4] + '1031'])
+                        t = list(filter(lambda x: x is not None, map(_lam_f, [item.trade_date[0:4] + '1031'], [data])))
+                        if t is not None:
+                            resampledf = resampledf.append(t)
+                    resample = resampledf.append(list(map(_lam_f, [item.trade_date], [data])))#每次循环最新一天都要替换，所以最新一天不能赋值给 resampledf,只能给resample
+                    resample = resample.dropna(how='all')
+                    ind = -8 if resample.shape[0]>8 else -resample.shape[0]
+                    #print(resample.loc[:, ['industry', 'trade_date', 'q_dtprofit']].head())
+                    # fit, p1 = RegUtil.regress_y_polynomial(resample[-8:].q_gr_ttm, poly=3, show=False)
+                    # fit, p2 = RegUtil.regress_y_polynomial(resample[-8:].q_profit_ttm, poly=3, show=False)
+                    fit, p3 = RegUtil.regress_y_polynomial(resample[ind:].q_dtprofit_ttm, poly=3, show=False)
+                    # fit, p4 = RegUtil.regress_y_polynomial(resample[-8:].q_opincome_ttm, poly=3, show=False)
+                    fit, p5 = RegUtil.regress_y_polynomial(resample[ind:].q_gr, poly=3, show=False)
+                    fit, p6 = RegUtil.regress_y_polynomial(resample[ind:].q_profit, poly=3, show=False)
+                    fit, p7 = RegUtil.regress_y_polynomial(resample[ind:].q_dtprofit, poly=3, show=False)
+                    fit, p8 = RegUtil.regress_y_polynomial(resample[ind:].q_opincome, poly=3, show=False)
+                    roe = item.q_dtprofit / item.total_hldr_eqy_exc_min_int
+                    pe = item.ind_total_mv*10000/item.q_dtprofit
+                    roe_ttm = item.q_dtprofit_ttm / item.total_hldr_eqy_exc_min_int
+                    pe_ttm = item.ind_total_mv*10000/item.q_dtprofit_ttm
+                    #print(indicator.columns)
+                    #print([item.trade_date,key[0],p3(8),p5(8),p6(8),p7(8),p8(8),roe,pe,roe_ttm,pe_ttm])
+                    indicator.loc[index] = [item.trade_date,key[0],p3(8),p5(8),p6(8),p7(8),p8(8),roe,pe,roe_ttm,pe_ttm]
+                    #print(indicator.loc[index])
             return indicator
         industry_daily = industry_daily.groupby("industry").apply(_trend).cache()
         #cond = [df.name == df3.name, df.age == df3.age]
@@ -554,19 +556,33 @@ class simpleValued:
         df2.filter(df2.trade_date>=start)
         #df = df.join(df2, ['industry', 'trade_date'], "inner")
 
-        add4_struct = ['sm_vol_20', 'sm_amount_20','md_vol_20', 'md_amount_20', 'lg_vol_20', 'lg_amount_20', 'elg_vol_20', 'elg_amount_20']
+        add4_struct = ['sm_amount_20', 'md_amount_20', 'lg_amount_20', 'elg_amount_20', 's_sm_amount_20', 's_md_amount_20',  's_lg_amount_20', 's_elg_amount_20','md_lg_elg_rate','lg_elg_rate','net_lg_elg','net_md_lg_elg']
         p4 = copy.deepcopy(self.money.schema)
         list(map(lambda x: p4.add(StructField(x, DoubleType())), add4_struct))
         @pandas_udf(p4, PandasUDFType.GROUPED_MAP)
         def _money_trend(df):
-            df.loc[:, 'sm_vol_20'] = df.buy_sm_vol.rolling(20).sum()
+            #df.loc[:, 'sm_vol_20'] = df.buy_sm_vol.rolling(20).sum()
             df.loc[:, 'sm_amount_20'] = df.buy_sm_amount.rolling(20).sum()
-            df.loc[:,'md_vol_20'] = df.buy_md_vol.rolling(20).sum()
+            #df.loc[:,'md_vol_20'] = df.buy_md_vol.rolling(20).sum()
             df.loc[:, 'md_amount_20'] = df.buy_md_amount.rolling(20).sum()
-            df.loc[:, 'lg_vol_20'] = df.buy_lg_vol.rolling(20).sum()
+            #df.loc[:, 'lg_vol_20'] = df.buy_lg_vol.rolling(20).sum()
             df.loc[:, 'lg_amount_20'] = df.buy_lg_amount.rolling(20).sum()
-            df.loc[:, 'elg_vol_20'] = df.buy_elg_vol.rolling(20).sum()
+            #df.loc[:, 'elg_vol_20'] = df.buy_elg_vol.rolling(20).sum()
             df.loc[:, 'elg_amount_20'] = df.buy_elg_amount.rolling(20).sum()
+            #df.loc[:, 's_sm_vol_20'] = df.sell_sm_vol.rolling(20).sum()
+            df.loc[:, 's_sm_amount_20'] = df.sell_sm_amount.rolling(20).sum()
+            #df.loc[:, 's_md_vol_20'] = df.sell_md_vol.rolling(20).sum()
+            df.loc[:, 's_md_amount_20'] = df.sell_md_amount.rolling(20).sum()
+            #df.loc[:, 's_lg_vol_20'] = df.sell_lg_vol.rolling(20).sum()
+            df.loc[:, 's_lg_amount_20'] = df.sell_lg_amount.rolling(20).sum()
+            #df.loc[:, 's_elg_vol_20'] = df.sell_elg_vol.rolling(20).sum()
+            df.loc[:, 's_elg_amount_20'] = df.sell_elg_amount.rolling(20).sum()
+            df.loc[:,'md_lg_elg_rate'] = round((df.md_amount_20+df.lg_amount_20+df.elg_amount_20)/(df.md_amount_20+df.lg_amount_20+df.elg_amount_20+df.sm_amount_20),3)
+            df.loc[:, 'lg_elg_rate'] = round((df.lg_amount_20 + df.elg_amount_20) / (df.md_amount_20 + df.lg_amount_20 + df.elg_amount_20 + df.sm_amount_20),3)
+            # df.loc[:, 's_md_lg_elg_rate'] = (df.s_md_amount_20 + df.s_lg_amount_20 + df.s_elg_amount_20) / (df.s_md_amount_20 + df.s_lg_amount_20 + df.s_elg_amount_20 + df.s_sm_amount_20)
+            # df.loc[:, 's_lg_elg_rate'] = (df.s_lg_amount_20 + df.s_elg_amount_20) / (df.s_md_amount_20 + df.s_lg_amount_20 + df.s_elg_amount_20 + df.s_sm_amount_20)
+            df.loc[:,'net_lg_elg'] = df.lg_amount_20+df.elg_amount_20-(df.s_lg_amount_20 + df.s_elg_amount_20)
+            df.loc[:,'net_md_lg_elg'] = df.md_amount_20+df.lg_amount_20+df.elg_amount_20-(df.s_md_amount_20 + df.s_lg_amount_20 + df.s_elg_amount_20)
             return df
         df3 = self.money.groupby('ts_code').apply(_money_trend)
         df3.filter(df3.trade_date>=start)
@@ -587,14 +603,18 @@ class simpleValued:
         aweek = datetime.datetime.strptime(first_day, "%Y%m%d").date()+datetime.timedelta(days=7)
         end = datetime.datetime.strptime(first_day, "%Y%m%d").date()+datetime.timedelta(days=time_delay)
         first = df[(df.opincome_of_ebt > 85) & (df.debt_to_assets < 70) & (df.trade_date > first_day) & (df.trade_date < aweek.strftime('%Y%m%d')) & (df.roe_yearly > 10) & (df.roe_pb7 > 1) & (df.half_roe_pb7 > df.roe_pb7)].groupby('ts_code', as_index=False).first()
-        se = df[df.ts_code.isin(first.ts_code.values) & df.trade_date<end].groupby('ts_code',as_index=False).last()
+        se = df[df.ts_code.isin(first.ts_code.values) & (df.trade_date < end.strftime('%Y%m%d')) & (df.trade_date > first_day)].groupby('ts_code', as_index=False).apply(lambda t: t.loc[t.adj_close.idxmax()])
         se = se[['ts_code','adj_close','trade_date']]
         se.rename(columns=({'adj_close': 'adj_close_end','trade_date':'trade_date_end'}), inplace = True)
         first = first.merge(se,on='ts_code',how='inner')
         first.loc[:,'range_rise'] = first.adj_close_end/first.adj_close
         return first
+    # df = pd.read_pickle('usr/local/spark/result.pkl')
+    # t = perform(df,'20190101',80).sort_values(by=['range_rise', 'elg_amount_20'], ascending=False)
+    # t[['ts_code', 'range_rise', 'elg_amount_20', 'lg_amount_20', 'md_amount_20','s_elg_amount_20','s_lg_amount_20','s_md_amount_20','net_lg_elg','net_md_lg_elg']]
+    # main = df[df[0:10].ts_code.isin(t.ts_code)]
+    #main.round((df.md_amount_20+df.lg_amount_20+df.elg_amount_20)/(df.md_amount_20+df.lg_amount_20+df.elg_amount_20+df.sm_amount_20),3)
 
-    t.sort_values(by=['range_rise', 'elg_amount_20'], ascending=False)[['ts_code', 'range_rise', 'elg_amount_20', 'lg_amount_20', 'md_amount_20']]
 
 
 
@@ -616,7 +636,7 @@ if __name__ == '__main__':
 
     #df = spark.createDataFrame(basic.loc[:,['ts_code','trade_date']])
     #print('###############fy###############')
-    sv = simpleValued('20180601','20190816')
+    sv = simpleValued('20180101','20190816')
     print(time.strftime("%a %b %d %H:%M:%S %Y", time.localtime()))
     df = sv.non_finacal_top5_valued()
     df = sv.industry_trend_top10(df)
