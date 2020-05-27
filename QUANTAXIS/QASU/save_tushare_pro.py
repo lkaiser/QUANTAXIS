@@ -1516,16 +1516,16 @@ if __name__ == '__main__':
     #DATABASE.stock_daily_basic_tushare.remove()
     print('##############start###############')
 
-    #QA_SU_save_stock_daily_basic(start_day='20190618',ind=795)
-    QA_SU_save_stock_report_fina_indicator(start_day='201900101',ind=945)
-    QA_SU_save_stock_report_assetliability(start_day='20190101',ind=2504)
-    QA_SU_save_stock_report_income(start_day='20190101')
-    QA_SU_save_stock_report_cashflow(start_day='20190101')
-    QA_SU_save_stock_adj_factor(start_day='20110101',ind=2700)
-    #QA_SU_save_stock_money_flow(start_day='20010101')
+    #QA_SU_save_stock_daily_basic(start_day='20190816')
+    #QA_SU_save_stock_report_fina_indicator(start_day='20190816')
+    QA_SU_save_stock_report_assetliability(start_day='20190816')
+    QA_SU_save_stock_report_income(start_day='20190816')
+    QA_SU_save_stock_report_cashflow(start_day='20190816')
+    QA_SU_save_stock_adj_factor(start_day='20190816')
+    QA_SU_save_stock_money_flow(start_day='20190816')
 
 
-    QA_SU_save_industry_indicator(start_day='20190619')
+    #QA_SU_save_industry_indicator(start_day='20190619')
     #print(pd.date_range('20170331','20171231',freq='Q-DEC').strftime('%Y%m%d'))
     #result = []
     # def when_done(r):
